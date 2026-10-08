@@ -156,7 +156,7 @@ segment_rootlets_if_does_not_exist ${file}.nii.gz
 # Get rootlets spinal levels
 # Note: we use SCT python because the `02a_rootlets_to_spinal_levels.py` script imports some SCT classes
 echo "👉 Getting spinal levels and distances from the PMJ..."
-$SCT_DIR/python/envs/venv_sct/bin/python ~/code/model-spinal-rootlets/inter-rater_variability/02a_rootlets_to_spinal_levels.py -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz -pmj ${file}_label-pmj.nii.gz -dilate 3
+$SCT_DIR/python/envs/venv_sct/bin/python ~/code/spinal-levels/02a_rootlets_to_spinal_levels.py -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz -pmj ${file}_label-pmj.nii.gz -dilate 3
 
 # Copy the CSV file with the spinal levels distances from the PMJ to the results folder (used by
 # 02_compute_cervical_midpoints_distance.py), so that only the results folder needs to be copied from the server

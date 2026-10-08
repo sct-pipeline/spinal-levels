@@ -19,7 +19,7 @@ All scripts require SCT (they use the SCT Python environment).
 | `config_01_run_batch_rootlets_spinal_levels.json` | `sct_run_batch` config listing the spine-generic subjects with manual rootlets and spinal cord segmentations. |
 
 Spinal levels for the cervical analysis are computed by
-[`inter-rater_variability/02a_rootlets_to_spinal_levels.py`](../inter-rater_variability/02a_rootlets_to_spinal_levels.py),
+[`02a_rootlets_to_spinal_levels.py`](02a_rootlets_to_spinal_levels.py),
 called from the batch script.
 
 ## Cervical: C2–C8

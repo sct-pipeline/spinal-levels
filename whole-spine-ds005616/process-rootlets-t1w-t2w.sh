@@ -177,7 +177,7 @@ for contrast in T1w T2w; do
 
     # Get rootlets spinal levels
     # Note: we use SCT python because the script imports some SCT classes
-    $SCT_DIR/python/envs/venv_sct/bin/python /code/model-spinal-rootlets/inter-rater_variability/02a_rootlets_to_spinal_levels.py \
+    $SCT_DIR/python/envs/venv_sct/bin/python /code/spinal-levels/02a_rootlets_to_spinal_levels.py \
         -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz -pmj ${FILEPMJ}.nii.gz -dilate 3
 
     # Copy the CSV file with the spinal levels distances from the PMJ to the results folder (used by
