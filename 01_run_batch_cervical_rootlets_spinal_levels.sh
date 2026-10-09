@@ -2,30 +2,40 @@
 #
 # This script performs:
 # - segmentation of spinal cord from T2w data (seg_sc_contrast_agnostic)
-# - detection of PMJ from T2w data (sct_detect_pmj).
-# - generation of intervertebral disc labels from T2w data (sct_label_vertebrae)
-# - projection of intervertebral disc labels to the spinal cord centerline (sct_label_utils)
+# - detection of PMJ from T2w data (sct_detect_pmj) -- only when the PMJ reference is requested
 # - finding the rootlets segmentation (if it exists)
-# - computing the spinal levels of the rootlets (if the rootlets segmentation exists) and distances to the PMJ
+# - computing the spinal levels of the rootlets and distances of the spinal levels from the chosen reference (REF):
+#     pmj : pontomedullary junction
+#     c2  : top of the C2 spinal level (rootlets label 2)
+#     all : both of the above
+# The output are CSV files with the spinal levels and distances from the chosen reference with columns: spinal_level,
+# fname, slice_start, slice_end, distance_from_REF_start, distance_from_REF_end, distance_from_REF_midpoint, height
 #
-# Expected file naming (cropped data):
-#   image:        sub-XXX_<contrast>_crop.nii.gz                 (e.g. sub-amuAL_T1w_crop.nii.gz)
-#   SC seg:       sub-XXX_<contrast>_label-SC_seg_crop.nii.gz    (e.g. sub-amuAL_T1w_label-SC_seg_crop.nii.gz)
-#   PMJ:          sub-XXX_<contrast>_label-pmj_crop.nii.gz
-#   discs:        sub-XXX_<contrast>_label-disc-manual_crop.nii.gz
-#   rootlets:     sub-XXX_<contrast>_label-rootletseg_crop.nii.gz
+# Expected file naming:
+#   image:        sub-XXX_<contrast>.nii.gz
+#   SC seg:       sub-XXX_<contrast>_label-SC_seg.nii.gz
+#   PMJ:          sub-XXX_<contrast>_label-pmj.nii.gz
+#   rootlets:     sub-XXX_<contrast>_label-rootlets_dseg.nii.gz
 
 # NOTE: This script is inspired by the script 'inter-rater_variability/02_run_batch_inter_rater_variability.sh'
 # https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02_run_batch_inter_rater_variability.sh
 
-# This script used the script '02a_rootlets_to_spinal_levels.py' (to get spinal levels) available at:
+# This script used the script 'rootlets_to_spinal_levels.py' (to get spinal levels), modified from:
 # https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
 
 # Usage:
-## sct_run_batch -script analysis_preprocess_pipeline.sh
+## PATH_SCRIPTS=<path/to/spinal-levels> sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh
+##                     -script-args "<REF>"            # pmj | c2 | all  (default: all)
 ##                     -path-data <DATA>
 ##                     -path-output <DATA>_202X-XX-XX
 ##                     -jobs 5
+##
+## PATH_SCRIPTS = folder containing rootlets_to_spinal_levels.py. It must be set because sct_run_batch runs a copy
+## of this bash script from the output folder. Alternatively, run `export PATH_SCRIPTS=...` once in your shell.
+##
+## Examples:
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2"  -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "all" -path-data <DATA> -path-output <OUT>
 
 # Authors: Katerina Krejci
 
@@ -41,6 +51,26 @@ trap "echo Caught Keyboard Interrupt within script. Exiting now.; exit" INT
 
 # Retrieve input params
 SUBJECT=${1%%/*}
+# Reference for the distances: 2nd argument (sct_run_batch -script-args), else REF env variable, else "all"
+REF=${2:-${REF:-all}}
+REF=$(echo "$REF" | tr '[:upper:]' '[:lower:]')   # accept C2, PMJ, ALL
+
+case $REF in
+  pmj|c2) REF_LIST="$REF" ;;
+  all)    REF_LIST="pmj c2" ;;
+  *)      echo "ERROR: unknown reference '$REF'. Use one of: pmj, c2, all."; exit 1 ;;
+esac
+echo "Reference(s) for spinal level distances: ${REF_LIST}"
+
+# Folder with rootlets_to_spinal_levels.py.
+# sct_run_batch runs a copy of this script from the output folder, so set PATH_SCRIPTS to the repo folder when
+# running through sct_run_batch; otherwise the folder of this script is used.
+PATH_SCRIPTS=${PATH_SCRIPTS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
+SCRIPT_SPINAL_LEVELS="${PATH_SCRIPTS}/rootlets_to_spinal_levels.py"
+if [[ ! -f ${SCRIPT_SPINAL_LEVELS} ]]; then
+  echo "ERROR: ${SCRIPT_SPINAL_LEVELS} not found. Set PATH_SCRIPTS to the folder containing it."
+  exit 1
+fi
 
 # Get starting time:
 start=`date +%s`
@@ -49,8 +79,8 @@ start=`date +%s`
 # FUNCTIONS
 # ==============================================================================
 # Uses global variables:
-#   base     = sub-XXX_<contrast>          (e.g. sub-amuAL_T1w)
-#   file     = sub-XXX_<contrast>_crop     (cropped image, without .nii.gz)
+#   base     = sub-XXX_<contrast>          (e.g. sub-amuAL_T2w)
+#   file     = sub-XXX_<contrast>          (image, without .nii.gz)
 #   contrast = T1w | T2w
 
 # Segment spinal cord if it does not exist in the derivatives folder
@@ -93,30 +123,6 @@ detect_pmj_if_does_not_exist(){
   fi
 }
 
-# Label vertebral levels if it does not exist in the derivatives folder
-label_if_does_not_exist(){
-  FILELABEL="${base}_label-disc-manual"
-  FILELABELMANUAL="${PATH_DATA}/derivatives/labels/${SUBJECT}/anat/${FILELABEL}.nii.gz"
-  echo "Looking for manual label: $FILELABELMANUAL"
-  if [[ -e $FILELABELMANUAL ]]; then
-    echo "Found! Using manual intervertebral disc labels."
-    rsync -avzh $FILELABELMANUAL ${FILELABEL}.nii.gz
-    sct_image -i ${FILELABEL}.nii.gz -setorient RPI -o ${FILELABEL}.nii.gz
-  else
-    echo "Manual intervertebral discs not found. Proceeding with automatic labeling."
-
-    if [[ $contrast == "T2w" ]]; then
-      sct_label_vertebrae -i ${file}.nii.gz -s ${FILESEG}.nii.gz -c t2 -qc ${PATH_QC} -qc-subject ${SUBJECT}
-    else
-      sct_label_vertebrae -i ${file}.nii.gz -s ${FILESEG}.nii.gz -c t1 -qc ${PATH_QC} -qc-subject ${SUBJECT}
-    fi
-    # Rename automatically generated disc labels to match the manual ones
-    mv ${FILESEG}_labeled_discs.nii.gz ${FILELABEL}.nii.gz
-  fi
-  # Generate QC report for intervertebral disc labeling (either manual or automatic)
-  sct_qc -i ${file}.nii.gz -s ${FILELABEL}.nii.gz -p sct_label_utils -qc ${PATH_QC} -qc-subject ${SUBJECT}
-}
-
 # Copy rootlets segmentation if it exists in the derivatives folder
 copy_rootlets_if_exist(){
   FILESEGROOTLETS="${base}_label-rootlets_dseg"
@@ -131,6 +137,26 @@ copy_rootlets_if_exist(){
     echo "Not found. Creating automatic rootlets segmentation."
     CUDA_VISIBLE_DEVICES=0 SCT_USE_GPU=1 sct_deepseg rootlets -i ${file}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT} -o ${FILESEGROOTLETS}.nii.gz
   fi
+}
+
+# Get rootlets spinal levels and distances from the given reference (pmj | c2),
+# then copy the resulting CSV to the results folder
+# Note: we use SCT python because the `rootlets_to_spinal_levels.py` script imports some SCT classes
+run_spinal_levels(){
+  local ref=$1
+  local ref_name pmj_arg csv_suffix
+  case $ref in
+    pmj) ref_name="PMJ";    pmj_arg="-pmj ${FILEPMJ}.nii.gz"; csv_suffix="pmj_distance" ;;
+    c2)  ref_name="C2 top"; pmj_arg="";                       csv_suffix="c2_distance" ;;
+  esac
+
+  echo "👉 Getting spinal levels and distances from the ${ref_name}..."
+  $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_SPINAL_LEVELS} \
+    -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz ${pmj_arg} -dilate 3 -ref ${ref}
+
+  # Copy the CSV file with the spinal levels distances to the results folder (used by
+  # 02_compute_cervical_midpoints_distance.py), so that only the results folder needs to be copied from the server
+  rsync -avzh ${FILESEGROOTLETS}_${csv_suffix}.csv ${PATH_RESULTS}/
 }
 
 # SCRIPT STARTS HERE
@@ -151,9 +177,10 @@ echo "SUBJECT=${SUBJECT}"
 echo "PWD=$(pwd)"
 ls
 
-for contrast in T1w T2w; do
-    base="${SUBJECT//[\/]/_}_${contrast}"      # e.g. sub-amuAL_T1w
-    file="${base}"                        # e.g. sub-amuAL_T1w_crop
+# Can be extended to T1w usage (i.e. for contrast in T1w T2w; do)
+for contrast in T2w; do
+    base="${SUBJECT//[\/]/_}_${contrast}"      # e.g. sub-amuAL_T2w
+    file="${base}"
 
     if [[ ! -f ${file}.nii.gz ]]; then
         echo "WARNING: ${file}.nii.gz not found in $(pwd), skipping."
@@ -163,26 +190,18 @@ for contrast in T1w T2w; do
     # Segment spinal cord (only if it does not exist)
     segment_sc_if_does_not_exist
 
-    # Run sct_label_vertebrae for vertebral levels estimation (not needed for now)
-    #label_if_does_not_exist
-
-    # Project the intervertebral disc labels to the spinal cord centerline (not needed for now)
-    #sct_label_utils -i ${FILESEG}.nii.gz -o ${FILELABEL}_centerline.nii.gz -project-centerline ${FILELABEL}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT}
-
-    # Detect PMJ (only if it does not exist)
-    detect_pmj_if_does_not_exist
+    # Detect PMJ (only if it does not exist and only if the PMJ reference is requested)
+    if [[ " ${REF_LIST} " == *" pmj "* ]]; then
+        detect_pmj_if_does_not_exist
+    fi
 
     # Copy the rootlets segmentation if it exists
     copy_rootlets_if_exist
 
-    # Get rootlets spinal levels
-    # Note: we use SCT python because the script imports some SCT classes
-    $SCT_DIR/python/envs/venv_sct/bin/python /code/spinal-levels/02a_rootlets_to_spinal_levels.py \
-        -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz -pmj ${FILEPMJ}.nii.gz -dilate 3
-
-    # Copy the CSV file with the spinal levels distances from the PMJ to the results folder (used by
-    # 02_compute_cervical_midpoints_distance.py), so that only the results folder needs to be copied from the server
-    rsync -avzh ${FILESEGROOTLETS}_pmj_distance.csv ${PATH_RESULTS}/
+    # Spinal levels + distances for each requested reference
+    for ref in ${REF_LIST}; do
+        run_spinal_levels ${ref}
+    done
 
 done
 
@@ -192,6 +211,7 @@ runtime=$((end-start))
 echo
 echo "~~~"
 echo "SCT version: `sct_version`"
+echo "Reference(s): ${REF_LIST}"
 echo "Ran on:      `uname -nsr`"
 echo "Duration:    $(($runtime / 3600))hrs $((($runtime / 60) % 60))min $(($runtime % 60))sec"
 echo "~~~"
