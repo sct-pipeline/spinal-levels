@@ -54,6 +54,8 @@ SUBJECT=${1%%/*}
 # Reference for the distances: 2nd argument (sct_run_batch -script-args), else REF env variable, else "all"
 REF=${2:-${REF:-all}}
 REF=$(echo "$REF" | tr '[:upper:]' '[:lower:]')   # accept C2, PMJ, ALL
+METHOD=${3:-${METHOD:-rootlets}}
+[[ $METHOD == "PAM50" ]] && METHOD_SUFFIX="_PAM50" || METHOD_SUFFIX="ROOTLETS-ONLY"
 
 case $REF in
   pmj|c2) REF_LIST="$REF" ;;
@@ -144,19 +146,25 @@ copy_rootlets_if_exist(){
 # Note: we use SCT python because the `rootlets_to_spinal_levels.py` script imports some SCT classes
 run_spinal_levels(){
   local ref=$1
-  local ref_name pmj_arg csv_suffix
+  local ref_name pmj_arg csv_suffix method_args
   case $ref in
     pmj) ref_name="PMJ";    pmj_arg="-pmj ${FILEPMJ}.nii.gz"; csv_suffix="pmj_distance" ;;
     c2)  ref_name="C2 top"; pmj_arg="";                       csv_suffix="c2_distance" ;;
   esac
 
-  echo "👉 Getting spinal levels and distances from the ${ref_name}..."
-  $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_SPINAL_LEVELS} \
-    -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz ${pmj_arg} -dilate 3 -ref ${ref}
+  # Method-specific arguments: dilation only for rootlets, image + QC only for PAM50 registration
+  if [[ $METHOD == "PAM50" ]]; then
+    method_args="-img ${file}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT}"
+  else
+    method_args="-dilate 3"
+  fi
 
-  # Copy the CSV file with the spinal levels distances to the results folder (used by
-  # 02_compute_cervical_midpoints_distance.py), so that only the results folder needs to be copied from the server
-  rsync -avzh ${FILESEGROOTLETS}_${csv_suffix}.csv ${PATH_RESULTS}/
+  echo "👉 Getting spinal levels (${METHOD}) and distances from the ${ref_name}..."
+  $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_SPINAL_LEVELS} \
+    -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz ${pmj_arg} -ref ${ref} \
+    -method ${METHOD} ${method_args}
+
+  rsync -avzh ${FILESEGROOTLETS}_${csv_suffix}${METHOD_SUFFIX}.csv ${PATH_RESULTS}/
 }
 
 # SCRIPT STARTS HERE
