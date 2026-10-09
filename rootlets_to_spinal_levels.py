@@ -66,12 +66,12 @@ def get_parser():
         prog=os.path.basename(__file__)
     )
     parser.add_argument(
-        '-i',
+        '-rootlets',
         required=True,
         help='Path to the spinal nerve rootlet segmentation.'
     )
     parser.add_argument(
-        '-s',
+        '-seg',
         required=True,
         help='Path to the spinal cord segmentation.'
     )
@@ -107,10 +107,10 @@ def get_parser():
         help='How to obtain the spinal levels:'
              '\n\trootlets : projection of the rootlets on the SC segmentation (default)'
              '\n\tPAM50    : PAM50 spinal levels warped to the subject space (registration using the rootlets; '
-             'requires -img)'
+             'requires -mri)'
     )
     parser.add_argument(
-        '-img',
+        '-mri',
         required=False,
         help='Path to the anatomical image (e.g. T2w). Required when -method PAM50.'
     )

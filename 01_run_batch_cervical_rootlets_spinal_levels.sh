@@ -161,7 +161,7 @@ run_spinal_levels(){
 
   echo "👉 Getting spinal levels (${METHOD}) and distances from the ${ref_name}..."
   $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_SPINAL_LEVELS} \
-    -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz ${pmj_arg} -ref ${ref} \
+    -rootlets ${FILESEGROOTLETS}.nii.gz -seg ${FILESEG}.nii.gz ${pmj_arg} -ref ${ref} \
     -method ${METHOD} ${method_args}
 
   rsync -avzh ${FILESEGROOTLETS}_${csv_suffix}${METHOD_SUFFIX}.csv ${PATH_RESULTS}/
