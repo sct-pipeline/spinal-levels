@@ -4,8 +4,11 @@ The script does the following:
     spinal cord segmentation by 1, 2 or 3 voxels (input argument) and then finding the intersection between the dilated
     spinal cord segmentation and the rootlets segmentation. The spinal levels are then defined based on the top and
     bottom slice of the intersection.
-    - compute the distance between the pontomedullary junction (PMJ) and the start, end and midpoint of the spinal
-    level (PMJ label is required)
+    - compute the distance (along the cord centerline) of the start, end and midpoint of each spinal level from a
+    reference point, chosen with -ref:
+        pmj : pontomedullary junction (PMJ label required, -pmj)
+        top : most superior slice of the spinal cord segmentation
+        c2  : top (most superior slice) of the C2 spinal level obtained from the rootlets (label 2)
 
 The script outputs .nii.gz file with spinal levels and saves the results in CSV files.
 
@@ -13,8 +16,10 @@ The script requires the SCT conda environment to be activated:
     source ${SCT_DIR}/python/etc/profile.d/conda.sh
     conda activate venv_sct
 
-Example:
+Examples:
     python 02a_rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlet_rater1.nii.gz -s sub-001_T2w_seg.nii.gz -pmj sub-001_T2w_pmj.nii.gz
+    python 02a_rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlet_rater1.nii.gz -s sub-001_T2w_seg.nii.gz -ref top
+    python 02a_rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlet_rater1.nii.gz -s sub-001_T2w_seg.nii.gz -ref c2
 
 OR, the script can be run using a wrapper script 02_run_batch_inter_rater_variability.sh
 
@@ -31,6 +36,10 @@ import pandas as pd
 
 from argparse import RawTextHelpFormatter
 from spinalcordtoolbox.image import Image, zeros_like
+from spinalcordtoolbox.centerline.core import ParamCenterline, get_centerline
+
+# Label value of the C2 spinal level in the rootlets segmentation
+C2_LEVEL = 2
 
 
 def get_parser():
@@ -41,8 +50,8 @@ def get_parser():
     parser = argparse.ArgumentParser(
         description='The script does the following:'
                     '\n\t- project the nerve rootlets on the spinal cord segmentation to obtain spinal levels'
-                    '\n\t- compute the distance between the pontomedullary junction (PMJ) and the start and end of '
-                    'the spinal level (PMJ label is required)',
+                    '\n\t- compute the distance between a reference point (PMJ, top of the SC segmentation, or top '
+                    'of the C2 spinal level) and the start, end and midpoint of each spinal level',
         formatter_class=RawTextHelpFormatter,
         prog=os.path.basename(__file__)
     )
@@ -59,8 +68,18 @@ def get_parser():
     parser.add_argument(
         '-pmj',
         required=False,
-        help='Path to the pontomedullary junction (PMJ) label. If provided, the script computes the distance between '
-             'the PMJ and the start and end of the spinal level.'
+        help='Path to the pontomedullary junction (PMJ) label. Required when -ref pmj.'
+    )
+    parser.add_argument(
+        '-ref',
+        required=False,
+        choices=['pmj', 'top', 'c2'],
+        default=None,
+        help='Reference point for the distances:'
+             '\n\tpmj : pontomedullary junction (requires -pmj)'
+             '\n\ttop : most superior slice of the SC segmentation'
+             '\n\tc2  : top of the C2 spinal level (rootlets label ' + str(C2_LEVEL) + ')'
+             '\nDefault: "pmj" if -pmj is provided, otherwise "top".'
     )
     parser.add_argument(
         '-dilate',
@@ -91,6 +110,25 @@ def get_centerline_from_pmj(fname_seg, fname_pmj):
     fname_centerline = fname_seg.replace('.nii.gz', '_centerline_extrapolated.csv')
 
     return fname_centerline
+
+
+def get_centerline_from_seg(im_seg):
+    """
+    Fit the centerline on the SC segmentation (RPI).
+    :return: 3xN array (x, y, z) in voxel coordinates, sorted by ascending z (inferior -> superior)
+    """
+    param = ParamCenterline(algo_fitting='bspline', smooth=30, minmax=True)
+    _, arr_ctl, _, _ = get_centerline(im_seg, param, verbose=0)
+    return arr_ctl
+
+
+def get_distance_along_centerline(centerline_points, px, py, pz):
+    """
+    Cumulative arc length (mm) along the centerline, measured from the most superior slice (= 0 mm) downward.
+    Same output format as get_distance_from_pmj(): row 0 = distance, row 1 = z slice index.
+    """
+    z_index = centerline_points.shape[1] - 1   # top slice (centerline is sorted ascending in z)
+    return get_distance_from_pmj(centerline_points, z_index, px, py, pz)
 
 
 def intersect_seg_and_rootlets(im_rootlets, fname_seg, fname_rootlets, dilate_size):
@@ -135,7 +173,7 @@ def project_rootlets_to_segmentation(im_rootlets, im_seg, im_intersect, rootlets
     :param rootlets_levels: list of the spinal nerve rootlets levels
     :param fname_rootlets: path to the spinal nerve rootlet segmentation
     :return: fname_spinal_levels: path to the spinal levels segmentation
-    :return: start_end_slices: list of the spinal levels start and end slices
+    :return: start_end_slices: dict of the spinal levels start (inferior) and end (superior) slices
     """
     im_spinal_levels_data = np.copy(im_seg.data)
 
@@ -191,14 +229,14 @@ def get_distance_from_pmj(centerline_points, z_index, px, py, pz):
     return arr_length
 
 
-def pmj_dist(centerline_dist, start, end):
+def pmj_or_c2_top_dist(centerline_dist, start, end):
     """
-    Compute the distance between the pontomedullary junction (PMJ) and the start and end of the spinal level
-    :param centerline_dist: distance between the PMJ and the centerline
+    Compute the distance between the reference point (PMJ, SC top or C2 top) and the start and end of the spinal level
+    :param centerline_dist: distance between the reference point and the centerline
     :param start: start slice of the spinal level
     :param end: end slice of the spinal level
-    :return: dist_start: distance between the PMJ and the start of the spinal level
-    :return: dist_end: distance between the PMJ and the end of the spinal level
+    :return: dist_start: distance between the reference point and the start of the spinal level
+    :return: dist_end: distance between the reference point and the end of the spinal level
     """
     if not np.isnan(start):
         dist_start = float(centerline_dist[0, np.where(centerline_dist[1] == start)])
@@ -211,6 +249,36 @@ def pmj_dist(centerline_dist, start, end):
     return dist_start, dist_end
 
 
+def build_distance_table(arr_distance, start_end_slices, rootlets_levels, fname_rootlets, col_prefix, clip):
+    """
+    Build a DataFrame with the distance of the start, end and midpoint of each spinal level from the reference point.
+    :param arr_distance: 2xN array, row 0 = distance from the reference (mm), row 1 = z slice index
+    :param col_prefix: column prefix, e.g. 'distance_from_pmj'
+    :param clip: clip the level slices to the centerline extent (the dilated seg can reach past the seg ends)
+    """
+    z_min, z_max = arr_distance[1].min(), arr_distance[1].max()
+    output_data = list()
+    for level in rootlets_levels:
+        print(f'Processing level {level}...')
+        if level not in start_end_slices:
+            print(f'WARNING: No intersection found for {level}.')
+            continue
+        start, end = start_end_slices[level]['start'], start_end_slices[level]['end']
+        if clip:
+            start, end = int(np.clip(start, z_min, z_max)), int(np.clip(end, z_min, z_max))
+
+        dist_start, dist_end = pmj_or_c2_top_dist(arr_distance, start, end)
+        output_data.append({'spinal_level': level,
+                            'fname': fname_rootlets,
+                            'slice_start': start_end_slices[level]['start'],
+                            'slice_end': start_end_slices[level]['end'],
+                            f'{col_prefix}_start': dist_start,
+                            f'{col_prefix}_end': dist_end,
+                            f'{col_prefix}_midpoint': (dist_start + dist_end) / 2,
+                            'height': dist_start - dist_end})
+    return pd.DataFrame(output_data)
+
+
 def main():
     # Parse the command line arguments
     parser = get_parser()
@@ -219,6 +287,11 @@ def main():
     fname_rootlets = args.i
     fname_seg = args.s
     dilate_size = args.dilate
+
+    # Resolve the reference point
+    ref = args.ref if args.ref is not None else ('pmj' if args.pmj else 'top')
+    if ref == 'pmj' and not args.pmj:
+        parser.error('-ref pmj requires the -pmj label.')
 
     # Load input images using the SCT Image class
     im_rootlets = Image(fname_rootlets).change_orientation('RPI')
@@ -241,16 +314,15 @@ def main():
     fname_spinal_levels, start_end_slices = project_rootlets_to_segmentation(im_rootlets, im_seg, im_intersect,
                                                                              rootlets_levels, fname_rootlets)
 
-    if args.pmj:
-        fname_pmj = args.pmj
-        im_pmj = Image(fname_pmj).change_orientation('RPI')
+    if ref == 'pmj':
+        im_pmj = Image(args.pmj).change_orientation('RPI')
 
         # Check if the PMJ label file is not empty
         if len(np.unique(im_pmj.data)) == 1:
             raise ValueError('The PMJ label file is empty.')
 
         # Generate extrapolated centerline from PMJ
-        fname_centerline = get_centerline_from_pmj(fname_seg, fname_pmj)
+        fname_centerline = get_centerline_from_pmj(fname_seg, args.pmj)
 
         # Load CSV file with centerline coordinates generated by the previous command as an array
         centerline = np.genfromtxt(fname_centerline, delimiter=',')
@@ -258,35 +330,41 @@ def main():
         arr_distance = get_distance_from_pmj(centerline, centerline[2].argmax(), im_pmj.dim[4], im_pmj.dim[5],
                                              im_pmj.dim[6])
 
-        output_data = list()
-        for level in rootlets_levels:
-            print(f'Processing level {level}...')
-
-            # Check if the level key is in the dictionary; if not, skip it
-            if level not in start_end_slices.keys():
-                print(f'WARNING: No intersection found for {level}.')
-                continue
-
-            # Compute the distance between the PMJ and the start and end of the spinal level
-            dist_start, dist_end = pmj_dist(arr_distance, start_end_slices[level]['start'], start_end_slices[level]['end'])
-
-            output_data.append({'spinal_level': level,
-                                'fname': fname_rootlets,
-                                'slice_start': start_end_slices[level]['start'],
-                                'slice_end': start_end_slices[level]['end'],
-                                'distance_from_pmj_start': dist_start,
-                                'distance_from_pmj_end': dist_end,
-                                'distance_from_pmj_midpoint': (dist_start + dist_end) / 2,
-                                'height': dist_start - dist_end
-                                })
-
-        # Create a pandas DataFrame
-        df = pd.DataFrame(output_data)
-
-        # Save the DataFrame as a CSV file
+        df = build_distance_table(arr_distance, start_end_slices, rootlets_levels, fname_rootlets,
+                                  col_prefix='distance_from_pmj', clip=False)
         fname_out = fname_rootlets.replace('.nii.gz', '_pmj_distance.csv')
-        df.to_csv(fname_out, index=False)
-        print(f'CSV file saved in {fname_out}.')
+
+    else:
+        # Distance along the centerline fitted on the SC segmentation, 0 mm = top of the segmentation
+        centerline = get_centerline_from_seg(im_seg)
+        arr_distance = get_distance_along_centerline(centerline, im_seg.dim[4], im_seg.dim[5], im_seg.dim[6])
+
+        if ref == 'top':
+            col_prefix = 'distance_from_top'
+            fname_out = fname_rootlets.replace('.nii.gz', '_centerline_distance.csv')
+
+        if ref == 'c2':
+            if C2_LEVEL not in start_end_slices:
+                raise ValueError(f'C2 spinal level (label {C2_LEVEL}) not found in the rootlets/SC intersection.')
+            # Top of C2 = most superior slice of the C2 level ('end', since RPI z increases superiorly)
+            z_min, z_max = arr_distance[1].min(), arr_distance[1].max()
+            c2_top_slice = int(np.clip(start_end_slices[C2_LEVEL]['end'], z_min, z_max))
+            c2_top_dist = float(arr_distance[0, arr_distance[1] == c2_top_slice][0])
+            print(f'Top of C2 spinal level: slice {c2_top_slice}, {c2_top_dist:.2f} mm below the SC seg top.')
+
+            # Shift so that the top of C2 = 0 mm (levels above C2, e.g. C1, get negative values)
+            arr_distance = arr_distance.copy()
+            arr_distance[0] -= c2_top_dist
+
+            col_prefix = 'distance_from_c2_top'
+            fname_out = fname_rootlets.replace('.nii.gz', '_c2_distance.csv')
+
+        df = build_distance_table(arr_distance, start_end_slices, rootlets_levels, fname_rootlets,
+                                  col_prefix=col_prefix, clip=True)
+
+    # Save the DataFrame as a CSV file
+    df.to_csv(fname_out, index=False)
+    print(f'CSV file saved in {fname_out}.')
 
 
 if __name__ == '__main__':
