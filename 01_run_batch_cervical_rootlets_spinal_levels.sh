@@ -187,7 +187,7 @@ sct_check_dependencies -short
 cd $PATH_DATA_PROCESSED
 
 # Copy source images
-rsync -Ravzh ${PATH_DATA}/./${SUBJECT}/anat/${SUBJECT//[\/]/_}_*.* .
+rsync -Ravzh ${PATH_DATA}/./${SUBJECT}/anat/${SUBJECT//[\/]/_}_T2w.* .
 
 # Go to anat folder where all data are located
 cd ${SUBJECT}/anat
