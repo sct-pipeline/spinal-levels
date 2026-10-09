@@ -102,7 +102,7 @@ def get_parser():
     parser.add_argument(
         '-method',
         required=False,
-        choices=['rootlets', 'PAM50'],
+        choices=['ROOTLETS-ONLY', 'PAM50'],
         default='rootlets',
         help='How to obtain the spinal levels:'
              '\n\trootlets : projection of the rootlets on the SC segmentation (default)'
