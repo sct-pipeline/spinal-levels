@@ -1,16 +1,15 @@
 """
 The script does the following:
-    - obtain spinal levels, either
-        rootlets (default): project the nerve rootlets on the spinal cord segmentation. This is done by dilating the
-            spinal cord segmentation by selected number of voxels (input argument) and then finding the intersection
-            between the dilated spinal cord segmentation and the rootlets segmentation. The spinal levels are then
-            defined based on the top and bottom slice of the intersection.
+    - obtain spinal levels, chosen with -method:
+        rootlets-only (default): project the nerve rootlets on the spinal cord segmentation. This is done by dilating
+            the spinal cord segmentation by selected number of voxels (input argument) and then finding the
+            intersection between the dilated spinal cord segmentation and the rootlets segmentation. The spinal levels
+            are then defined based on the top and bottom slice of the intersection.
         PAM50: register the image to the PAM50 template using the rootlets (sct_register_to_template -lrootlet),
             warp the template to the subject space (sct_warp_template) and use the warped PAM50 spinal levels.
     - compute the distance (along the cord centerline) of the start, end and midpoint of each spinal level from a
     reference point, chosen with -ref:
         pmj : pontomedullary junction (PMJ label required, -pmj)
-        top : most superior slice of the SC segmentation
         c2  : top (most superior slice) of the C2 spinal level (label 2)
 
 The script outputs .nii.gz file with spinal levels and saves the results in CSV files.
@@ -20,11 +19,10 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Examples:
-    python rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlets_dseg.nii.gz -s sub-001_T2w_label-SC_seg.nii.gz -pmj sub-001_T2w_label-pmj.nii.gz
-    python rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlets_dseg.nii.gz -s sub-001_T2w_label-SC_seg.nii.gz -ref top
-    python rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlets_dseg.nii.gz -s sub-001_T2w_label-SC_seg.nii.gz -ref c2
-    python rootlets_to_spinal_levels.py -i sub-001_T2w_label-rootlets_dseg.nii.gz -s sub-001_T2w_label-SC_seg.nii.gz -ref c2 \
-        -method PAM50 -img sub-001_T2w.nii.gz -qc ./qc -qc-subject sub-001
+    python rootlets_to_spinal_levels.py -rootlets sub-001_T2w_label-rootlets_dseg.nii.gz -seg sub-001_T2w_label-SC_seg.nii.gz -ref pmj -pmj sub-001_T2w_label-pmj.nii.gz
+    python rootlets_to_spinal_levels.py -rootlets sub-001_T2w_label-rootlets_dseg.nii.gz -seg sub-001_T2w_label-SC_seg.nii.gz -ref c2
+    python rootlets_to_spinal_levels.py -rootlets sub-001_T2w_label-rootlets_dseg.nii.gz -seg sub-001_T2w_label-SC_seg.nii.gz -ref c2 \
+        -method PAM50 -mri sub-001_T2w.nii.gz -qc ./qc -qc-subject sub-001
 
 OR, the script can be run using the wrapper script 01_run_batch_cervical_rootlets_spinal_levels.sh
 
@@ -50,6 +48,11 @@ C2_LEVEL = 2
 PAM50_OFOLDER = 'reg_rootlets'
 PAM50_SPINAL_LEVELS = os.path.join('template', 'PAM50_spinal_levels.nii.gz')
 
+# Methods and the suffix they add to the output CSV file names
+METHOD_ROOTLETS = 'rootlets-only'
+METHOD_PAM50 = 'PAM50'
+CSV_SUFFIX = {METHOD_ROOTLETS: '_rootlets-only', METHOD_PAM50: '_PAM50'}
+
 
 def get_parser():
     """
@@ -60,8 +63,8 @@ def get_parser():
         description='The script does the following:'
                     '\n\t- obtain spinal levels from the rootlets (projection on the SC segmentation) or from the '
                     'PAM50 template registered using the rootlets'
-                    '\n\t- compute the distance between a reference point (PMJ, top of the SC segmentation, or top '
-                    'of the C2 spinal level) and the start, end and midpoint of each spinal level',
+                    '\n\t- compute the distance between a reference point (PMJ or top of the C2 spinal level) and '
+                    'the start, end and midpoint of each spinal level',
         formatter_class=RawTextHelpFormatter,
         prog=os.path.basename(__file__)
     )
@@ -76,43 +79,40 @@ def get_parser():
         help='Path to the spinal cord segmentation.'
     )
     parser.add_argument(
+        '-ref',
+        required=True,
+        choices=['pmj', 'c2'],
+        help='Reference point for the distances:'
+             '\n\tpmj : pontomedullary junction (requires -pmj)'
+             '\n\tc2  : top of the C2 spinal level (label ' + str(C2_LEVEL) + ')'
+    )
+    parser.add_argument(
         '-pmj',
         required=False,
         help='Path to the pontomedullary junction (PMJ) label. Required when -ref pmj.'
-    )
-    parser.add_argument(
-        '-ref',
-        required=False,
-        choices=['pmj', 'top', 'c2'],
-        default=None,
-        help='Reference point for the distances:'
-             '\n\tpmj : pontomedullary junction (requires -pmj)'
-             '\n\ttop : most superior slice of the SC segmentation'
-             '\n\tc2  : top of the C2 spinal level (label ' + str(C2_LEVEL) + ')'
-             '\nDefault: "pmj" if -pmj is provided, otherwise "top".'
     )
     parser.add_argument(
         '-dilate',
         required=False,
         type=int,
         help='Size of spinal cord segmentation dilation in pixels. Large number leads to "longer" spinal levels. '
-             'Typical values: 1, 2 or 3. Default: 3. Used only with -method rootlets.',
+             'Typical values: 1, 2 or 3. Default: 3. Used only with -method ' + METHOD_ROOTLETS + '.',
         default=3,
     )
     parser.add_argument(
         '-method',
         required=False,
-        choices=['ROOTLETS-ONLY', 'PAM50'],
-        default='rootlets',
+        choices=[METHOD_ROOTLETS, METHOD_PAM50],
+        default=METHOD_ROOTLETS,
         help='How to obtain the spinal levels:'
-             '\n\trootlets : projection of the rootlets on the SC segmentation (default)'
-             '\n\tPAM50    : PAM50 spinal levels warped to the subject space (registration using the rootlets; '
-             'requires -mri)'
+             '\n\t' + METHOD_ROOTLETS + ' : projection of the rootlets on the SC segmentation (default)'
+             '\n\t' + METHOD_PAM50 + '         : PAM50 spinal levels warped to the subject space (registration '
+             'using the rootlets; requires -mri)'
     )
     parser.add_argument(
         '-mri',
         required=False,
-        help='Path to the anatomical image (e.g. T2w). Required when -method PAM50.'
+        help='Path to the anatomical image (e.g. T2w). Required when -method ' + METHOD_PAM50 + '.'
     )
     parser.add_argument(
         '-qc',
@@ -252,13 +252,19 @@ def register_to_pam50(fname_img, fname_seg, fname_rootlets, ofolder, qc=None, qc
     if os.path.isfile(fname_warp):
         print(f'Warping field {fname_warp} already exists, skipping sct_register_to_template.')
     else:
-        cmd = ['sct_register_to_template', '-i', fname_img, '-s', fname_seg, '-lrootlet', fname_rootlets, '-ofolder',
-               ofolder, '-qc', qc, '-qc-subject', qc_subject]
+        cmd = ['sct_register_to_template', '-i', fname_img, '-s', fname_seg, '-lrootlet', fname_rootlets,
+               '-ofolder', ofolder]
+        # Add QC arguments only if provided (None values would break subprocess)
+        if qc:
+            cmd += ['-qc', qc]
+            if qc_subject:
+                cmd += ['-qc-subject', qc_subject]
         subprocess.run(cmd, check=True)
 
     fname_spinal_levels = os.path.join(ofolder, PAM50_SPINAL_LEVELS)
     if not os.path.isfile(fname_spinal_levels):
-        subprocess.run(['sct_warp_template', '-d', fname_img, '-w', fname_warp, '-a', '0', '-ofolder', ofolder], check=True)
+        subprocess.run(['sct_warp_template', '-d', fname_img, '-w', fname_warp, '-a', '0', '-ofolder', ofolder],
+                       check=True)
 
     if not os.path.isfile(fname_spinal_levels):
         raise FileNotFoundError(f'{fname_spinal_levels} not found after sct_warp_template. Check the content of '
@@ -369,13 +375,12 @@ def main():
     fname_mri_img = args.mri
     dilate_size = args.dilate
     method = args.method
+    ref = args.ref
 
-    # Resolve the reference point
-    ref = args.ref if args.ref is not None else ('pmj' if args.pmj else 'top')
     if ref == 'pmj' and not args.pmj:
         parser.error('-ref pmj requires the -pmj label.')
-    if method == 'PAM50' and not fname_mri_img:
-        parser.error('-method PAM50 requires the anatomical image (-img).')
+    if method == METHOD_PAM50 and not fname_mri_img:
+        parser.error(f'-method {METHOD_PAM50} requires the anatomical image (-mri).')
 
     # Load input images using the SCT Image class
     im_rootlets = Image(fname_rootlets).change_orientation('RPI')
@@ -385,7 +390,7 @@ def main():
     if len(np.unique(im_seg.data)) != 2:
         raise ValueError('The spinal cord segmentation should be binary.')
 
-    if method == 'rootlets':
+    if method == METHOD_ROOTLETS:
         # Intersect the rootlets and the SC segmentation
         fname_intersect = intersect_seg_and_rootlets(im_rootlets, fname_seg, fname_rootlets, dilate_size)
 
@@ -398,16 +403,15 @@ def main():
         # Project the nerve rootlets intersection on the spinal cord segmentation to obtain spinal levels
         fname_spinal_levels, start_end_slices = project_rootlets_to_segmentation(im_rootlets, im_seg, im_intersect,
                                                                                  levels, fname_rootlets)
-        csv_suffix = '_rootlets-only'
-
-    elif method == 'PAM50':
+    else:  # METHOD_PAM50
         # Register to PAM50 using the rootlets and warp the PAM50 spinal levels to the subject space
         fname_spinal_levels = register_to_pam50(fname_mri_img, fname_seg, fname_rootlets, PAM50_OFOLDER,
                                                 qc=args.qc, qc_subject=args.qc_subject)
         im_levels = Image(fname_spinal_levels).change_orientation('RPI')
         start_end_slices, levels = get_start_end_slices_from_levels(im_levels)
         print(f'PAM50 spinal levels (subject space): {fname_spinal_levels}')
-        csv_suffix = '_PAM50'
+
+    csv_suffix = CSV_SUFFIX[method]
 
     if ref == 'pmj':
         im_pmj = Image(args.pmj).change_orientation('RPI')
@@ -429,7 +433,7 @@ def main():
                                   col_prefix='distance_from_pmj', clip=False)
         fname_out = fname_rootlets.replace('.nii.gz', f'_pmj_distance{csv_suffix}.csv')
 
-    elif ref == 'c2':
+    else:  # ref == 'c2'
         # Distance along the centerline fitted on the SC segmentation, 0 mm = top of the segmentation
         centerline = get_centerline_from_seg(im_seg)
         arr_distance = get_distance_along_centerline(centerline, im_seg.dim[4], im_seg.dim[5], im_seg.dim[6])

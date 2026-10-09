@@ -4,10 +4,12 @@
 # - segmentation of spinal cord from T2w data (seg_sc_contrast_agnostic)
 # - detection of PMJ from T2w data (sct_detect_pmj) -- only when the PMJ reference is requested
 # - finding the rootlets segmentation (if it exists)
-# - computing the spinal levels of the rootlets and distances of the spinal levels from the chosen reference (REF):
+# - computing the spinal levels and distances of the spinal levels from the chosen reference (REF):
 #     pmj : pontomedullary junction
 #     c2  : top of the C2 spinal level (rootlets label 2)
-#     all : both of the above
+#   using the chosen METHOD:
+#     rootlets-only : projection of the rootlets on the SC segmentation (default)
+#     PAM50         : PAM50 spinal levels warped to the subject space (registration using the rootlets)
 # The output are CSV files with the spinal levels and distances from the chosen reference with columns: spinal_level,
 # fname, slice_start, slice_end, distance_from_REF_start, distance_from_REF_end, distance_from_REF_midpoint, height
 #
@@ -25,7 +27,8 @@
 
 # Usage:
 ## PATH_SCRIPTS=<path/to/spinal-levels> sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh
-##                     -script-args "<REF>"            # pmj | c2 | all  (default: all)
+##                     -script-args "<REF> <METHOD>"   # REF: pmj | c2 (required)
+##                                                     # METHOD: rootlets-only | PAM50 (default: rootlets-only)
 ##                     -path-data <DATA>
 ##                     -path-output <DATA>_202X-XX-XX
 ##                     -jobs 5
@@ -34,8 +37,9 @@
 ## of this bash script from the output folder. Alternatively, run `export PATH_SCRIPTS=...` once in your shell.
 ##
 ## Examples:
-##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2"  -path-data <DATA> -path-output <OUT>
-##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "all" -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2"               -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "pmj rootlets-only" -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2 PAM50"         -path-data <DATA> -path-output <OUT>
 
 # Authors: Katerina Krejci
 
@@ -51,18 +55,25 @@ trap "echo Caught Keyboard Interrupt within script. Exiting now.; exit" INT
 
 # Retrieve input params
 SUBJECT=${1%%/*}
-# Reference for the distances: 2nd argument (sct_run_batch -script-args), else REF env variable, else "all"
-REF=${2:-${REF:-all}}
-REF=$(echo "$REF" | tr '[:upper:]' '[:lower:]')   # accept C2, PMJ, ALL
-METHOD=${3:-${METHOD:-rootlets}}
-[[ $METHOD == "PAM50" ]] && METHOD_SUFFIX="_PAM50" || METHOD_SUFFIX="ROOTLETS-ONLY"
+# Reference for the distances: 2nd argument (sct_run_batch -script-args), else REF env variable
+REF=${2:-${REF:-}}
+# Method for the spinal levels: 3rd argument, else METHOD env variable, else "rootlets-only"
+METHOD=${3:-${METHOD:-rootlets-only}}
 
 case $REF in
-  pmj|c2) REF_LIST="$REF" ;;
-  all)    REF_LIST="pmj c2" ;;
-  *)      echo "ERROR: unknown reference '$REF'. Use one of: pmj, c2, all."; exit 1 ;;
+  pmj) REF_NAME="PMJ" ;;
+  c2)  REF_NAME="C2 top" ;;
+  *)   echo "ERROR: unknown or missing reference '$REF'. Use one of: pmj, c2."; exit 1 ;;
 esac
-echo "Reference(s) for spinal level distances: ${REF_LIST}"
+echo "Reference for spinal level distances: ${REF}"
+
+# CSV suffix must match CSV_SUFFIX in rootlets_to_spinal_levels.py
+case $METHOD in
+  rootlets-only) METHOD_SUFFIX="_rootlets-only" ;;
+  PAM50)         METHOD_SUFFIX="_PAM50" ;;
+  *)             echo "ERROR: unknown method '$METHOD'. Use one of: rootlets-only, PAM50."; exit 1 ;;
+esac
+echo "Method for spinal levels: ${METHOD}"
 
 # Folder with rootlets_to_spinal_levels.py.
 # sct_run_batch runs a copy of this script from the output folder, so set PATH_SCRIPTS to the repo folder when
@@ -141,30 +152,30 @@ copy_rootlets_if_exist(){
   fi
 }
 
-# Get rootlets spinal levels and distances from the given reference (pmj | c2),
-# then copy the resulting CSV to the results folder
+# Get spinal levels and distances from the reference (REF), then copy the resulting CSV to the results folder
 # Note: we use SCT python because the `rootlets_to_spinal_levels.py` script imports some SCT classes
 run_spinal_levels(){
-  local ref=$1
-  local ref_name pmj_arg csv_suffix method_args
-  case $ref in
-    pmj) ref_name="PMJ";    pmj_arg="-pmj ${FILEPMJ}.nii.gz"; csv_suffix="pmj_distance" ;;
-    c2)  ref_name="C2 top"; pmj_arg="";                       csv_suffix="c2_distance" ;;
-  esac
+  local pmj_arg="" method_args fname_csv
+  [[ $REF == "pmj" ]] && pmj_arg="-pmj ${FILEPMJ}.nii.gz"
 
-  # Method-specific arguments: dilation only for rootlets, image + QC only for PAM50 registration
+  # Method-specific arguments: dilation only for rootlets-only, image + QC only for PAM50 registration
   if [[ $METHOD == "PAM50" ]]; then
     method_args="-mri ${file}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT}"
   else
     method_args="-dilate 3"
   fi
 
-  echo "👉 Getting spinal levels (${METHOD}) and distances from the ${ref_name}..."
+  echo "👉 Getting spinal levels (${METHOD}) and distances from the ${REF_NAME}..."
   $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_SPINAL_LEVELS} \
-    -rootlets ${FILESEGROOTLETS}.nii.gz -seg ${FILESEG}.nii.gz ${pmj_arg} -ref ${ref} \
+    -rootlets ${FILESEGROOTLETS}.nii.gz -seg ${FILESEG}.nii.gz -ref ${REF} ${pmj_arg} \
     -method ${METHOD} ${method_args}
 
-  rsync -avzh ${FILESEGROOTLETS}_${csv_suffix}${METHOD_SUFFIX}.csv ${PATH_RESULTS}/
+  fname_csv="${FILESEGROOTLETS}_${REF}_distance${METHOD_SUFFIX}.csv"
+  if [[ ! -f ${fname_csv} ]]; then
+    echo "ERROR: expected output ${fname_csv} not found."
+    exit 1
+  fi
+  rsync -avzh ${fname_csv} ${PATH_RESULTS}/
 }
 
 # SCRIPT STARTS HERE
@@ -199,17 +210,15 @@ for contrast in T2w; do
     segment_sc_if_does_not_exist
 
     # Detect PMJ (only if it does not exist and only if the PMJ reference is requested)
-    if [[ " ${REF_LIST} " == *" pmj "* ]]; then
+    if [[ $REF == "pmj" ]]; then
         detect_pmj_if_does_not_exist
     fi
 
     # Copy the rootlets segmentation if it exists
     copy_rootlets_if_exist
 
-    # Spinal levels + distances for each requested reference
-    for ref in ${REF_LIST}; do
-        run_spinal_levels ${ref}
-    done
+    # Spinal levels + distances from the reference
+    run_spinal_levels
 
 done
 
@@ -219,7 +228,8 @@ runtime=$((end-start))
 echo
 echo "~~~"
 echo "SCT version: `sct_version`"
-echo "Reference(s): ${REF_LIST}"
+echo "Reference:   ${REF}"
+echo "Method:      ${METHOD}"
 echo "Ran on:      `uname -nsr`"
 echo "Duration:    $(($runtime / 3600))hrs $((($runtime / 60) % 60))min $(($runtime % 60))sec"
 echo "~~~"
