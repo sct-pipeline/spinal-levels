@@ -154,7 +154,7 @@ run_spinal_levels(){
 
   # Method-specific arguments: dilation only for rootlets, image + QC only for PAM50 registration
   if [[ $METHOD == "PAM50" ]]; then
-    method_args="-img ${file}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT}"
+    method_args="-mri ${file}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT}"
   else
     method_args="-dilate 3"
   fi
