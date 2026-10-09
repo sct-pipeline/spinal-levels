@@ -6,6 +6,8 @@
 # - PMJ (label 50) and conus (label 60) (sct_label_utils -create-viewer)
 #   If the conus world Z is known from the CISS image (CONUS_CSV), only the PMJ is clicked and the conus is placed
 #   automatically on the centerline at that level (using 01a_place_conus_from_ciss.py).
+# - sagittal QC (sct_qc) of the centerline, the PMJ and the conus: one entry each, plus one entry with all three
+#   (using 01b_merge_labels_for_qc.py)
 #
 # The labels are saved to derivatives/labels/sub-*/ses-*/anat/ of the input dataset. Existing labels are kept (delete
 # the file to redo it). The cord length is then computed by 02_compute_cord_length.py.
@@ -21,6 +23,8 @@
 #   PATH_DATA: BIDS dataset (all subjects are processed if no subject is given)
 #   CONUS_CSV (optional): CSV file with the conus world Z from the CISS image, with columns 'subject' (subject number,
 #             e.g., 3 for sub-ltr03) and 'world_z_mm_ciss_tip' (in mm)
+#   PATH_QC (optional): folder for the QC report (default: qc_localizer_cord_length next to PATH_DATA). Each run adds
+#             new QC entries; delete the folder to start a clean report.
 #
 # Context: https://github.com/sct-pipeline/spinal-levels/issues/4
 #
@@ -33,6 +37,10 @@ PATH_DATA=$(cd "$1" && pwd)
 shift
 PATH_SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 PATH_LABELS="${PATH_DATA}/derivatives/labels"
+PATH_QC=${PATH_QC:-"$(dirname "${PATH_DATA}")/qc_localizer_cord_length"}
+PATH_TMP=$(mktemp -d)  # files used only for the QC
+# Text labels for the QC entry with the centerline, the PMJ and the conus (values from 01b_merge_labels_for_qc.py)
+echo '{"1": "centerline", "2": "PMJ", "3": "conus"}' > "${PATH_TMP}/qc_labels.json"
 GAP=10  # mm between manually clicked centerline points
 
 cd "${PATH_DATA}"
@@ -73,5 +81,25 @@ for SUBJECT in $SUBJECTS; do
           -o "${FILELABELS}" || true
       fi
     fi
+
+    # QC: sagittal view following the centerline, and the PMJ and the conus labels (each on its own sagittal slice)
+    if [ -f "${FILECENTERLINE}.nii.gz" ] && [ -f "${FILELABELS}" ]; then
+      QC_ARGS=(-qc "${PATH_QC}" -qc-dataset "$(basename "${PATH_DATA}")" -qc-subject "${SUBJECT}"
+               -qc-contrast localizerSag_T2w)
+      # -text-labels 0: do not draw vertebral level names (C1, ...) for the centerline value
+      sct_qc -i "$file_path" -s "${FILECENTERLINE}.nii.gz" -p sct_label_vertebrae -text-labels 0 "${QC_ARGS[@]}"
+      sct_label_utils -i "${FILELABELS}" -keep 50 -o "${PATH_TMP}/${file}_pmj.nii.gz"
+      sct_label_utils -i "${FILELABELS}" -keep 60 -o "${PATH_TMP}/${file}_conus.nii.gz"
+      sct_qc -i "$file_path" -s "${PATH_TMP}/${file}_pmj.nii.gz" -p sct_label_utils "${QC_ARGS[@]}"
+      sct_qc -i "$file_path" -s "${PATH_TMP}/${file}_conus.nii.gz" -p sct_label_utils "${QC_ARGS[@]}"
+      # All three in a single entry
+      python "${PATH_SCRIPTS}/01b_merge_labels_for_qc.py" -centerline "${FILECENTERLINE}.nii.gz" \
+        -labels "${FILELABELS}" -o "${PATH_TMP}/${file}_merged.nii.gz"
+      sct_qc -i "$file_path" -s "${PATH_TMP}/${file}_merged.nii.gz" -p sct_label_vertebrae \
+        -custom-labels "${PATH_TMP}/qc_labels.json" "${QC_ARGS[@]}"
+    fi
   done
 done
+
+rm -rf "${PATH_TMP}"
+echo "QC report: ${PATH_QC}/index.html"
