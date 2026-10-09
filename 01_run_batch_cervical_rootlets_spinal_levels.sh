@@ -4,11 +4,12 @@
 # - segmentation of spinal cord from T2w data (seg_sc_contrast_agnostic)
 # - detection of PMJ from T2w data (sct_detect_pmj) -- only when the PMJ reference is requested
 # - finding the rootlets segmentation (if it exists)
-# - computing the spinal levels of the rootlets and distances of the spinal levels from the chosen reference:
+# - computing the spinal levels of the rootlets and distances of the spinal levels from the chosen reference (REF):
 #     pmj : pontomedullary junction
-#     top : top of the spinal cord segmentation (centerline top)
 #     c2  : top of the C2 spinal level (rootlets label 2)
-#     all : all three of the above
+#     all : both of the above
+# The output are CSV files with the spinal levels and distances from the chosen reference with columns: spinal_level,
+# fname, slice_start, slice_end, distance_from_REF_start, distance_from_REF_end, distance_from_REF_midpoint, height
 #
 # Expected file naming:
 #   image:        sub-XXX_<contrast>.nii.gz
@@ -19,19 +20,22 @@
 # NOTE: This script is inspired by the script 'inter-rater_variability/02_run_batch_inter_rater_variability.sh'
 # https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02_run_batch_inter_rater_variability.sh
 
-# This script used the script '02a_rootlets_to_spinal_levels.py' (to get spinal levels) available at:
+# This script used the script 'rootlets_to_spinal_levels.py' (to get spinal levels), modified from:
 # https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
 
 # Usage:
-## sct_run_batch -script analysis_preprocess_pipeline.sh
-##                     -script-args "<REF>"            # pmj | top | c2 | all  (default: all)
+## PATH_SCRIPTS=<path/to/spinal-levels> sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh
+##                     -script-args "<REF>"            # pmj | c2 | all  (default: all)
 ##                     -path-data <DATA>
 ##                     -path-output <DATA>_202X-XX-XX
 ##                     -jobs 5
 ##
+## PATH_SCRIPTS = folder containing rootlets_to_spinal_levels.py. It must be set because sct_run_batch runs a copy
+## of this bash script from the output folder. Alternatively, run `export PATH_SCRIPTS=...` once in your shell.
+##
 ## Examples:
-##   sct_run_batch -script analysis_preprocess_pipeline.sh -script-args "c2"  -path-data <DATA> -path-output <OUT>
-##   sct_run_batch -script analysis_preprocess_pipeline.sh -script-args "all" -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2"  -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "all" -path-data <DATA> -path-output <OUT>
 
 # Authors: Katerina Krejci
 
@@ -49,14 +53,24 @@ trap "echo Caught Keyboard Interrupt within script. Exiting now.; exit" INT
 SUBJECT=${1%%/*}
 # Reference for the distances: 2nd argument (sct_run_batch -script-args), else REF env variable, else "all"
 REF=${2:-${REF:-all}}
-REF=$(echo "$REF" | tr '[:upper:]' '[:lower:]')   # accept C2, PMJ, TOP, ...
+REF=$(echo "$REF" | tr '[:upper:]' '[:lower:]')   # accept C2, PMJ, ALL
 
 case $REF in
-  pmj|top|c2) REF_LIST="$REF" ;;
-  all)        REF_LIST="pmj top c2" ;;
-  *)          echo "ERROR: unknown reference '$REF'. Use one of: pmj, top, c2, all."; exit 1 ;;
+  pmj|c2) REF_LIST="$REF" ;;
+  all)    REF_LIST="pmj c2" ;;
+  *)      echo "ERROR: unknown reference '$REF'. Use one of: pmj, c2, all."; exit 1 ;;
 esac
 echo "Reference(s) for spinal level distances: ${REF_LIST}"
+
+# Folder with rootlets_to_spinal_levels.py.
+# sct_run_batch runs a copy of this script from the output folder, so set PATH_SCRIPTS to the repo folder when
+# running through sct_run_batch; otherwise the folder of this script is used.
+PATH_SCRIPTS=${PATH_SCRIPTS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
+SCRIPT_SPINAL_LEVELS="${PATH_SCRIPTS}/rootlets_to_spinal_levels.py"
+if [[ ! -f ${SCRIPT_SPINAL_LEVELS} ]]; then
+  echo "ERROR: ${SCRIPT_SPINAL_LEVELS} not found. Set PATH_SCRIPTS to the folder containing it."
+  exit 1
+fi
 
 # Get starting time:
 start=`date +%s`
@@ -125,20 +139,19 @@ copy_rootlets_if_exist(){
   fi
 }
 
-# Get rootlets spinal levels and distances from the given reference (pmj | top | c2),
+# Get rootlets spinal levels and distances from the given reference (pmj | c2),
 # then copy the resulting CSV to the results folder
-# Note: we use SCT python because the `02a_rootlets_to_spinal_levels.py` script imports some SCT classes
+# Note: we use SCT python because the `rootlets_to_spinal_levels.py` script imports some SCT classes
 run_spinal_levels(){
   local ref=$1
   local ref_name pmj_arg csv_suffix
   case $ref in
-    pmj) ref_name="PMJ";            pmj_arg="-pmj ${FILEPMJ}.nii.gz"; csv_suffix="pmj_distance" ;;
-    top) ref_name="centerline top"; pmj_arg="";                       csv_suffix="centerline_distance" ;;
-    c2)  ref_name="C2 top";         pmj_arg="";                       csv_suffix="c2_distance" ;;
+    pmj) ref_name="PMJ";    pmj_arg="-pmj ${FILEPMJ}.nii.gz"; csv_suffix="pmj_distance" ;;
+    c2)  ref_name="C2 top"; pmj_arg="";                       csv_suffix="c2_distance" ;;
   esac
 
   echo "👉 Getting spinal levels and distances from the ${ref_name}..."
-  $SCT_DIR/python/envs/venv_sct/bin/python ~/PycharmProjects/spinal-levels/02a_rootlets_to_spinal_levels.py \
+  $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_SPINAL_LEVELS} \
     -i ${FILESEGROOTLETS}.nii.gz -s ${FILESEG}.nii.gz ${pmj_arg} -dilate 3 -ref ${ref}
 
   # Copy the CSV file with the spinal levels distances to the results folder (used by

@@ -1,13 +1,12 @@
 """
 The script does the following:
     - project the nerve rootlets on the spinal cord segmentation to obtain spinal levels. This is done by dilating the
-    spinal cord segmentation by 1, 2 or 3 voxels (input argument) and then finding the intersection between the dilated
+    spinal cord segmentation by selected number of voxels (input argument) and then finding the intersection between the dilated
     spinal cord segmentation and the rootlets segmentation. The spinal levels are then defined based on the top and
     bottom slice of the intersection.
     - compute the distance (along the cord centerline) of the start, end and midpoint of each spinal level from a
     reference point, chosen with -ref:
         pmj : pontomedullary junction (PMJ label required, -pmj)
-        top : most superior slice of the spinal cord segmentation
         c2  : top (most superior slice) of the C2 spinal level obtained from the rootlets (label 2)
 
 The script outputs .nii.gz file with spinal levels and saves the results in CSV files.
@@ -23,9 +22,7 @@ Examples:
 
 OR, the script can be run using a wrapper script 02_run_batch_inter_rater_variability.sh
 
-Authors: Jan Valosek, Theo Mathieu
-
-NOTE: Copied from https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
+NOTE: Modified from https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
 (branch kk/spinal-levels-length, commit 613674e, which added the distance_from_pmj_midpoint column).
 """
 
@@ -231,7 +228,7 @@ def get_distance_from_pmj(centerline_points, z_index, px, py, pz):
 
 def pmj_or_c2_top_dist(centerline_dist, start, end):
     """
-    Compute the distance between the reference point (PMJ, SC top or C2 top) and the start and end of the spinal level
+    Compute the distance between the reference point (PMJ or C2 top) and the start and end of the spinal level
     :param centerline_dist: distance between the reference point and the centerline
     :param start: start slice of the spinal level
     :param end: end slice of the spinal level
@@ -267,15 +264,15 @@ def build_distance_table(arr_distance, start_end_slices, rootlets_levels, fname_
         if clip:
             start, end = int(np.clip(start, z_min, z_max)), int(np.clip(end, z_min, z_max))
 
-        dist_start, dist_end = pmj_or_c2_top_dist(arr_distance, start, end)
+        dist_end, dist_start = pmj_or_c2_top_dist(arr_distance, start, end)
         output_data.append({'spinal_level': level,
                             'fname': fname_rootlets,
-                            'slice_start': start_end_slices[level]['start'],
-                            'slice_end': start_end_slices[level]['end'],
-                            f'{col_prefix}_start': dist_start,
-                            f'{col_prefix}_end': dist_end,
+                            'slice_start_I-S': start_end_slices[level]['start'],
+                            'slice_end_I-S': start_end_slices[level]['end'],
+                            f'{col_prefix}_start_S-I': dist_start,
+                            f'{col_prefix}_end_S-I': dist_end,
                             f'{col_prefix}_midpoint': (dist_start + dist_end) / 2,
-                            'height': dist_start - dist_end})
+                            'height': dist_end - dist_start})
     return pd.DataFrame(output_data)
 
 
@@ -334,30 +331,24 @@ def main():
                                   col_prefix='distance_from_pmj', clip=False)
         fname_out = fname_rootlets.replace('.nii.gz', '_pmj_distance.csv')
 
-    else:
+    if ref == 'c2':
         # Distance along the centerline fitted on the SC segmentation, 0 mm = top of the segmentation
         centerline = get_centerline_from_seg(im_seg)
         arr_distance = get_distance_along_centerline(centerline, im_seg.dim[4], im_seg.dim[5], im_seg.dim[6])
+        if C2_LEVEL not in start_end_slices:
+            raise ValueError(f'C2 spinal level (label {C2_LEVEL}) not found in the rootlets/SC intersection.')
+        # Top of C2 = most superior slice of the C2 level ('end', since RPI z increases superiorly)
+        z_min, z_max = arr_distance[1].min(), arr_distance[1].max()
+        c2_top_slice = int(np.clip(start_end_slices[C2_LEVEL]['end'], z_min, z_max))
+        c2_top_dist = float(arr_distance[0, arr_distance[1] == c2_top_slice][0])
+        print(f'Top of C2 spinal level: slice {c2_top_slice}, {c2_top_dist:.2f} mm below the SC seg top.')
 
-        if ref == 'top':
-            col_prefix = 'distance_from_top'
-            fname_out = fname_rootlets.replace('.nii.gz', '_centerline_distance.csv')
+        # Shift so that the top of C2 = 0 mm (levels above C2, e.g. C1, get negative values)
+        arr_distance = arr_distance.copy()
+        arr_distance[0] -= c2_top_dist
 
-        if ref == 'c2':
-            if C2_LEVEL not in start_end_slices:
-                raise ValueError(f'C2 spinal level (label {C2_LEVEL}) not found in the rootlets/SC intersection.')
-            # Top of C2 = most superior slice of the C2 level ('end', since RPI z increases superiorly)
-            z_min, z_max = arr_distance[1].min(), arr_distance[1].max()
-            c2_top_slice = int(np.clip(start_end_slices[C2_LEVEL]['end'], z_min, z_max))
-            c2_top_dist = float(arr_distance[0, arr_distance[1] == c2_top_slice][0])
-            print(f'Top of C2 spinal level: slice {c2_top_slice}, {c2_top_dist:.2f} mm below the SC seg top.')
-
-            # Shift so that the top of C2 = 0 mm (levels above C2, e.g. C1, get negative values)
-            arr_distance = arr_distance.copy()
-            arr_distance[0] -= c2_top_dist
-
-            col_prefix = 'distance_from_c2_top'
-            fname_out = fname_rootlets.replace('.nii.gz', '_c2_distance.csv')
+        col_prefix = 'distance_from_c2_top'
+        fname_out = fname_rootlets.replace('.nii.gz', '_c2_distance.csv')
 
         df = build_distance_table(arr_distance, start_end_slices, rootlets_levels, fname_rootlets,
                                   col_prefix=col_prefix, clip=True)
