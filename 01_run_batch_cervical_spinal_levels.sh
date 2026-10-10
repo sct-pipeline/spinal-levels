@@ -7,8 +7,8 @@
 # - computing the spinal levels and distances of the spinal levels from the chosen reference (REF):
 #     pmj : pontomedullary junction
 #     c2  : top of the C2 spinal level (rootlets label 2)
-#   using the chosen METHOD:
-#     rootlets-only : projection of the rootlets on the SC segmentation (default)
+#  - using the chosen METHOD:
+#     rootlets      : intersection of the rootlets segmentation with the spinal cord segmentation (dilated by 3 voxels)
 #     PAM50         : PAM50 spinal levels warped to the subject space (registration using the rootlets)
 # The output are CSV files with the spinal levels and distances from the chosen reference with columns: spinal_level,
 # fname, slice_start, slice_end, distance_from_REF_start, distance_from_REF_end, distance_from_REF_midpoint, height
@@ -26,9 +26,9 @@
 # https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
 
 # Usage:
-## PATH_SCRIPTS=<path/to/spinal-levels> sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh
+## PATH_SCRIPTS=<path/to/spinal-levels> sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh
 ##                     -script-args "<REF> <METHOD>"   # REF: pmj | c2 (required)
-##                                                     # METHOD: rootlets-only | PAM50 (default: rootlets-only)
+##                                                     # METHOD: rootlets | PAM50 (default: rootlets)
 ##                     -path-data <DATA>
 ##                     -path-output <DATA>_202X-XX-XX
 ##                     -jobs 5
@@ -37,9 +37,9 @@
 ## of this bash script from the output folder. Alternatively, run `export PATH_SCRIPTS=...` once in your shell.
 ##
 ## Examples:
-##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2"               -path-data <DATA> -path-output <OUT>
-##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "pmj rootlets-only" -path-data <DATA> -path-output <OUT>
-##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_rootlets_spinal_levels.sh -script-args "c2 PAM50"         -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh -script-args "c2"               -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh -script-args "pmj rootlets" -path-data <DATA> -path-output <OUT>
+##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh -script-args "c2 PAM50"         -path-data <DATA> -path-output <OUT>
 
 # Authors: Katerina Krejci
 
@@ -57,8 +57,8 @@ trap "echo Caught Keyboard Interrupt within script. Exiting now.; exit" INT
 SUBJECT=${1%%/*}
 # Reference for the distances: 2nd argument (sct_run_batch -script-args), else REF env variable
 REF=${2:-${REF:-}}
-# Method for the spinal levels: 3rd argument, else METHOD env variable, else "rootlets-only"
-METHOD=${3:-${METHOD:-rootlets-only}}
+# Method for the spinal levels: 3rd argument, else METHOD env variable, else "rootlets"
+METHOD=${3:-${METHOD:-rootlets}}
 
 case $REF in
   pmj) REF_NAME="PMJ" ;;
@@ -69,9 +69,9 @@ echo "Reference for spinal level distances: ${REF}"
 
 # CSV suffix must match CSV_SUFFIX in rootlets_to_spinal_levels.py
 case $METHOD in
-  rootlets-only) METHOD_SUFFIX="_rootlets-only" ;;
+  rootlets) METHOD_SUFFIX="_rootlets" ;;
   PAM50)         METHOD_SUFFIX="_PAM50" ;;
-  *)             echo "ERROR: unknown method '$METHOD'. Use one of: rootlets-only, PAM50."; exit 1 ;;
+  *)             echo "ERROR: unknown method '$METHOD'. Use one of: rootlets, PAM50."; exit 1 ;;
 esac
 echo "Method for spinal levels: ${METHOD}"
 
@@ -154,11 +154,11 @@ copy_rootlets_if_exist(){
 
 # Get spinal levels and distances from the reference (REF), then copy the resulting CSV to the results folder
 # Note: we use SCT python because the `rootlets_to_spinal_levels.py` script imports some SCT classes
-run_spinal_levels(){
+get_spinal_levels(){
   local pmj_arg="" method_args fname_csv
   [[ $REF == "pmj" ]] && pmj_arg="-pmj ${FILEPMJ}.nii.gz"
 
-  # Method-specific arguments: dilation only for rootlets-only, image + QC only for PAM50 registration
+  # Method-specific arguments: dilation only for rootlets, image + QC only for PAM50 registration
   if [[ $METHOD == "PAM50" ]]; then
     method_args="-mri ${file}.nii.gz -qc ${PATH_QC} -qc-subject ${SUBJECT}"
   else
@@ -218,7 +218,7 @@ for contrast in T2w; do
     copy_rootlets_if_exist
 
     # Spinal levels + distances from the reference
-    run_spinal_levels
+    get_spinal_levels
 
 done
 
