@@ -51,9 +51,16 @@ def get_parser():
                              'and figure are saved to the current working directory.')
     parser.add_argument('-reference', choices=['pmj', 'c2'], default='c2',
                         help='Reference point for distance computation. Default: c2')
+    parser.add_argument('-method', choices=['rootlets', 'PAM50'], default='rootlets',
+                        help='Method for spinal level estimation. Default: rootlets')
+    parser.add_argument('-distance', choices=['midpoint', 'total'], default='total',
+                        help='Distance to compute. Default: total')
     parser.add_argument('-participants', default=PARTICIPANTS_TSV,
                         help=f'participants.tsv file with the subject sex (used to color the points). '
                              f'Default: {PARTICIPANTS_TSV}')
+    parser.add_argument('-output-folder', default=os.getcwd() + "/figures-and-dataframes",
+                        help='Path to the output folder where the CSV files and figure will be saved. '
+                             'Default: current working directory.')
     return parser
 
 
@@ -95,21 +102,74 @@ def compute_midpoints_distance(df, reference, first_level=FIRST_LEVEL, last_leve
 
     return pd.DataFrame(rows)
 
+def compute_total_distance(df, reference, first_level=FIRST_LEVEL, last_level=LAST_LEVEL):
+    """
+    Compute the total distance between the top (start) of `first_level` and the bottom (end) of `last_level` for each
+    subject as `distance_from_{reference}_end_S-I` of `last_level` minus `distance_from_{reference}_start_S-I` of
+    `first_level`.
+    :param df: dataframe with per-level distances from the reference point
+    :param reference: reference point for distance computation
+    :param first_level: first spinal level
+    :param last_level: last spinal level
+    :return: dataframe with one row per subject
+    """
+    added_ref = f'{reference}_top' if reference == 'c2' else reference
+    df_start = df.pivot_table(index='subject', columns='spinal_level', values=f'distance_from_{added_ref}_start_S-I')
+    df_end = df.pivot_table(index='subject', columns='spinal_level', values=f'distance_from_{added_ref}_end_S-I')
 
-def generate_midpoints_distance_figure(df_midpoints, dir_path, reference, first_level=FIRST_LEVEL, last_level=LAST_LEVEL):
+    rows = []
+    for subject in df_start.index.union(df_end.index):
+        start_first = df_start.loc[subject].get(first_level, np.nan) if subject in df_start.index else np.nan
+        end_last = df_end.loc[subject].get(last_level, np.nan) if subject in df_end.index else np.nan
+        missing = [level for level, value in [(first_level, start_first), (last_level, end_last)] if pd.isna(value)]
+        if missing:
+            print(f"WARNING: {subject} is missing level(s) {','.join(map(str, missing))}; "
+                  f"the total distance will be NaN.")
+
+        rows.append({
+            'subject': subject,
+            'first_level': first_level,
+            'last_level': last_level,
+            f'distance_from_{added_ref}_start_first_level_mm': start_first,
+            f'distance_from_{added_ref}_end_last_level_mm': end_last,
+            'total_distance_mm': end_last - start_first
+        })
+
+    return pd.DataFrame(rows)
+
+
+def generate_distance_figure(df_midpoints, dir_path, reference, method, distance, first_level=FIRST_LEVEL,
+                                       last_level=LAST_LEVEL, height_col='height (cm)'):
     """
-    Generate a figure with subjects on the x-axis and the distance between the `first_level` and `last_level`
-    midpoints on the y-axis (one point per subject).
-    :param df_midpoints: dataframe returned by compute_midpoints_distance() with an added 'sex' column
+    Generate a figure with subjects on the x-axis (sorted by height) and the distance between the `first_level` and
+    `last_level` midpoints on the y-axis (one point per subject). Subjects without height are placed at the end and
+    separated by a vertical dashed line.
+    :param df_midpoints: dataframe returned by compute_midpoints_distance() with added 'sex' and `height_col` columns
     :param dir_path: path to the output folder where the figure will be saved
+    :param reference: reference point for distance computation
+    :param method: method to use for spinal level estimation
+    :param distance: distance to use (midpoints or total C2-C8 distance)
+    :param first_level: first spinal level
+    :param last_level: last spinal level
+    :param height_col: name of the column with subject height
     """
-    df_plot = df_midpoints.sort_values('subject').reset_index(drop=True)
+    df_plot = df_midpoints.copy()
+    # Make sure height is numeric (non-numeric entries such as 'n/a' become NaN)
+    df_plot[height_col] = pd.to_numeric(df_plot[height_col], errors='coerce')
+    # Sort by height (ascending); subjects without height go to the end (sorted by subject name)
+    df_plot = df_plot.sort_values([height_col, 'subject'], na_position='last').reset_index(drop=True)
+    n_with_height = int(df_plot[height_col].notna().sum())
 
     # Fixed figure size; subjects are shown as numbers (no subject names) so the figure stays compact
     fig, ax = plt.subplots(figsize=(8, 5))
     # Points colored by sex; subjects without sex information in gray
     x = np.arange(1, len(df_plot) + 1)
-    y = (df_plot['midpoints_distance_mm']).to_numpy() / 10  # convert mm to cm for plotting
+
+    if distance == "midpoint":
+        y = (df_plot['midpoints_distance_mm']).to_numpy() / 10  # convert mm to cm for plotting
+    elif distance == "total":
+        y = (df_plot['total_distance_mm']).to_numpy() / 10  # convert mm to cm for plotting
+
     for sex, style in SEX_STYLE.items():
         mask = (df_plot['sex'] == sex).to_numpy()
         ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=30, zorder=3,
@@ -119,26 +179,31 @@ def generate_midpoints_distance_figure(df_midpoints, dir_path, reference, first_
         ax.scatter(x[mask], y[mask], color='gray', marker='x', s=30, zorder=3,
                    label=f'Sex unknown (n = {mask.sum()})')
 
-    # Subjects (sorted alphabetically, i.e., grouped by site) as numbered x-axis positions
+    # Separator between subjects with and without height
+    if 0 < n_with_height < len(df_plot):
+        x_sep = n_with_height + 0.5
+        ax.axvline(x_sep, color='black', linestyle='--', linewidth=0.8, alpha=0.6, zorder=2)
+        ax.text(x_sep + 0.3, 1, f'Height unknown (n = {len(df_plot) - n_with_height})',
+                ha='left', va='top', fontsize=FONT_SIZE - 4, color='dimgray')
+
+    # Subjects sorted by height as numbered x-axis positions
     ax.set_xlim(0.5, len(df_plot) + 0.5)
-    ax.set_xlabel(f'Subject (n = {len(df_plot)})', fontsize=FONT_SIZE)
+    ax.set_xlabel(f'Subject sorted by height (n = {len(df_plot)})', fontsize=FONT_SIZE)
     ax.set_ylim(0, 12)
 
-    ax.set_ylabel(f'Distance C{first_level}–C{last_level} midpoints [cm]', fontsize=FONT_SIZE)
+    ax.set_ylabel(f'{distance.capitalize()} distance C{first_level}–C{last_level} [cm]', fontsize=FONT_SIZE)
     ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
     ax.tick_params(axis='x', labelsize=FONT_SIZE - 2)
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    # Legend above the plot so it does not overlap the points
-    ax.legend(loc='lower right', bbox_to_anchor=(1, 0.03), ncol=3, frameon=False, fontsize=FONT_SIZE - 4,
-              handletextpad=0.3, columnspacing=1)
-    ax.set_title(f'Distance between C{first_level} and C{last_level} midpoints (reference: {reference.upper()})', fontsize=FONT_SIZE)
+    ax.legend(loc='lower left', bbox_to_anchor=(0.00, 0.03), ncol=1, frameon=True, fontsize=FONT_SIZE - 4)
+    ax.set_title(f'{distance.capitalize()} distance between C{first_level} and C{last_level} (reference: {reference.upper()}, method: {method.upper()})', fontsize=FONT_SIZE-2)
 
     plt.tight_layout()
 
-    fname_figure = os.path.join(dir_path, f'figure_spinal_levels_midpoints_distance_{first_level}-{last_level}_ref_{reference}.png')
+    fname_figure = os.path.join(dir_path, f'figure_spinal_levels_{distance}_distance_{first_level}-{last_level}_ref_{reference}_method_{method}.png')
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     plt.show()
@@ -149,11 +214,14 @@ def main():
     args = parser.parse_args()
     dir_path = os.path.abspath(args.i)
     reference = args.reference
+    method = args.method
+    distance = args.distance
     # Outputs (CSV files and figure) are saved to the current working directory
-    out_dir = os.getcwd()
+    out_dir = os.path.abspath(args.output_folder)
+    os.makedirs(out_dir, exist_ok=True)
 
     # Get all the CSV files generated by the rootlets_to_spinal_levels.py script
-    csv_files = glob.glob(os.path.join(dir_path, '**', f'*{reference}_distance*.csv'), recursive=True)
+    csv_files = glob.glob(os.path.join(dir_path, '**', f'*{reference}_distance_{method}*.csv'), recursive=True)
     if not csv_files:
         raise FileNotFoundError(f'No *{reference}_distance*.csv files found in {dir_path}. Check the -i path.')
 
@@ -178,25 +246,33 @@ def main():
     df = df.sort_values(by=['subject', 'spinal_level'])
 
     # Save dataframe with all subjects to CSV file
-    fname_out = os.path.join(out_dir, 'spinal_levels_spine-generic.csv')
+    fname_out = os.path.join(out_dir, f'spinal_levels_ref_{reference}_method_{method}.csv')
     df.to_csv(fname_out, index=False)
     print(f'CSV file saved in {fname_out}.')
 
     # Compute the distance between the C2 and C8 midpoints (one value per subject)
-    df_midpoints = compute_midpoints_distance(df, reference, FIRST_LEVEL, LAST_LEVEL)
-    fname_midpoints = os.path.join(out_dir,
-                                   f'spinal_levels_midpoints_distance_{FIRST_LEVEL}-{LAST_LEVEL}_ref_{reference}.csv')
-    df_midpoints.to_csv(fname_midpoints, index=False)
-    print(f'Distance between the midpoints of levels {FIRST_LEVEL} and {LAST_LEVEL} saved in {fname_midpoints}.')
-    print(df_midpoints[['subject', 'midpoints_distance_mm']].describe())
+    if distance == "midpoint":
+        df_distance = compute_midpoints_distance(df, reference, FIRST_LEVEL, LAST_LEVEL)
+        fname_midpoints = os.path.join(out_dir,
+                                       f'spinal_levels_midpoints_distance_{FIRST_LEVEL}-{LAST_LEVEL}_ref_{reference}_method_{method}.csv')
+        df_distance.to_csv(fname_midpoints, index=False)
+        print(f'Distance between the midpoints of levels {FIRST_LEVEL} and {LAST_LEVEL} saved in {fname_midpoints}.')
+        print(df_distance[['subject', 'midpoints_distance_mm']].describe())
+
+    elif distance == "total":
+        df_distance = compute_total_distance(df, reference, FIRST_LEVEL, LAST_LEVEL)
+        fname_total = os.path.join(out_dir, f'spinal_levels_total_distance_{FIRST_LEVEL}-{LAST_LEVEL}_ref_{reference}_method_{method}.csv')
+        df_distance.to_csv(fname_total, index=False)
+        print(f'Total distance between levels {FIRST_LEVEL} and {LAST_LEVEL} saved in {fname_total}.')
+        print(df_distance[['subject', 'total_distance_mm']].describe())
 
     # Add the subject sex (used only to color the points in the figure)
     df_participants = pd.read_csv(args.participants, sep='\t')
-    df_midpoints = df_midpoints.merge(df_participants[['participant_id', 'sex']], how='left',
+    df_distance = df_distance.merge(df_participants[['participant_id', 'sex', 'height (cm)']], how='left',
                                       left_on='subject', right_on='participant_id')
 
     # Plot the distance between the C2 and C8 midpoints per subject
-    generate_midpoints_distance_figure(df_midpoints, out_dir, reference, FIRST_LEVEL, LAST_LEVEL)
+    generate_distance_figure(df_distance, out_dir, reference, method, distance, FIRST_LEVEL, LAST_LEVEL)
 
 
 if __name__ == '__main__':
