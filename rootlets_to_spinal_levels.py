@@ -1,7 +1,7 @@
 """
 The script does the following:
     - obtain spinal levels, chosen with -method:
-        rootlets-only (default): project the nerve rootlets on the spinal cord segmentation. This is done by dilating
+        rootlets (default): project the nerve rootlets on the spinal cord segmentation. This is done by dilating
             the spinal cord segmentation by selected number of voxels (input argument) and then finding the
             intersection between the dilated spinal cord segmentation and the rootlets segmentation. The spinal levels
             are then defined based on the top and bottom slice of the intersection.
@@ -24,7 +24,7 @@ Examples:
     python rootlets_to_spinal_levels.py -rootlets sub-001_T2w_label-rootlets_dseg.nii.gz -seg sub-001_T2w_label-SC_seg.nii.gz -ref c2 \
         -method PAM50 -mri sub-001_T2w.nii.gz -qc ./qc -qc-subject sub-001
 
-OR, the script can be run using the wrapper script 01_run_batch_cervical_rootlets_spinal_levels.sh
+OR, the script can be run using the wrapper script 01_run_batch_rootlets_spinal_levels.sh
 
 NOTE: Modified from https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
 (branch kk/spinal-levels-length, commit 613674e, which added the distance_from_pmj_midpoint column).
@@ -49,9 +49,9 @@ PAM50_OFOLDER = 'reg_rootlets'
 PAM50_SPINAL_LEVELS = os.path.join('template', 'PAM50_spinal_levels.nii.gz')
 
 # Methods and the suffix they add to the output CSV file names
-METHOD_ROOTLETS = 'rootlets-only'
+METHOD_ROOTLETS = 'rootlets'
 METHOD_PAM50 = 'PAM50'
-CSV_SUFFIX = {METHOD_ROOTLETS: '_rootlets-only', METHOD_PAM50: '_PAM50'}
+CSV_SUFFIX = {METHOD_ROOTLETS: '_rootlets', METHOD_PAM50: '_PAM50'}
 
 
 def get_parser():
@@ -61,7 +61,7 @@ def get_parser():
 
     parser = argparse.ArgumentParser(
         description='The script does the following:'
-                    '\n\t- obtain spinal levels from the rootlets (projection on the SC segmentation) or from the '
+                    '\n\t- obtain spinal levels from the rootlets (intersection with SC segmentation) or from the '
                     'PAM50 template registered using the rootlets'
                     '\n\t- compute the distance between a reference point (PMJ or top of the C2 spinal level) and '
                     'the start, end and midpoint of each spinal level',
@@ -105,8 +105,7 @@ def get_parser():
         choices=[METHOD_ROOTLETS, METHOD_PAM50],
         default=METHOD_ROOTLETS,
         help='How to obtain the spinal levels:'
-             '\n\t' + METHOD_ROOTLETS + ' : projection of the rootlets on the SC segmentation (default)'
-             '\n\t' + METHOD_PAM50 + '         : PAM50 spinal levels warped to the subject space (registration '
+             '\n\t' + METHOD_ROOTLETS + ' : intersection between dilated spinal cord segmentation and the spinal nerve rootlet segmentation'
              'using the rootlets; requires -mri)'
     )
     parser.add_argument(
