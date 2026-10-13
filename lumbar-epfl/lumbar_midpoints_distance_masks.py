@@ -27,8 +27,8 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Example:
-    python 07_lumbar_midpoints_distance_masks.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
-    python 07_lumbar_midpoints_distance_masks.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
+    python lumbar_midpoints_distance_masks.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
+    python lumbar_midpoints_distance_masks.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
 
 Author: Jan Valosek
 """
