@@ -4,9 +4,12 @@ This script computes a lumbar spinal cord length from spinal level masks saved o
     - the length per subject
     - the correlation between the length and subject height
 
-Two metrics are available (-metric); both count slices along the superior-inferior (S-I) axis and multiply by the
-slice thickness (S-I voxel size), i.e., the same logic as 03_compute_lumbar_midpoints_distance.py and
-04_compute_lumbar_length_topL1_bottom_L5.py, assuming that the spinal cord is approximately straight:
+NOTE:
+Axial slices are counted along the superior-inferior (S-I) axis and multiplied by the slice thickness (S-I voxel size),
+i.e., the same logic as ../03_compute_lumbar_midpoints_distance.py and../04_compute_lumbar_length_topL1_bottom_L5.py,
+assuming that the spinal cord is approximately straight:
+
+Two metrics are available (argument -metric);
     - top-bottom (default): length from the top of L1 to the bottom of L5 = (most superior slice of L1 - most inferior
       slice of L5 + 1) x slice thickness, i.e., both end slices included (as in 04)
     - midpoints: distance between the L1 and S1 midpoints = (center of mass slice of L1 - center of mass slice of S1)

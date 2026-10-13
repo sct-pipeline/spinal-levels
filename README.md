@@ -75,3 +75,21 @@ Outputs (in the folder passed to `-i`):
 - `lumbar_midpoints_distance_L1-S1.csv`: L1–S1 midpoints distance (mm) per subject, and the min slice, max slice and
   midpoint slice of each spinal level
 - `figure_lumbar_midpoints_distance_L1-S1.png`: L1–S1 midpoints distance per subject
+
+## Lumbar EPFL dataset
+
+Scripts for the lumbar EPFL dataset (`~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks`) are in
+[`lumbar-epfl/`](lumbar-epfl). Input: spinal cord masks with the personalized spinal levels saved one level per file
+(`sub-*/ses-*/anat/*_label-SC_desc-<level>_mask.nii.gz`, `desc-L1` ... `desc-S2`), and `participants.tsv` (sex and
+height) one level above the masks folder.
+
+| Script | What it does |
+|---|---|
+| `lumbar-epfl/lumbar_midpoints_distance_masks.py` | Computes the lumbar spinal cord length (`-metric top-bottom`: top of L1 to bottom of L5, default; `-metric midpoints`: L1–S1 midpoints distance), plots it per subject and its correlation with height. |
+
+```bash
+python lumbar-epfl/lumbar_midpoints_distance_masks.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
+```
+
+Outputs (in the current working directory): `lumbar_<metric>_masks.csv`, `figure_lumbar_<metric>_masks.png` and
+`figure_correlation_lumbar_<metric>_masks_height.png`.
