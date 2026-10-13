@@ -1,4 +1,6 @@
 """
+TL;DR: Compute a lumbar spinal cord length by counting axial slices and multiplying by slice thickness.
+
 This script computes a lumbar spinal cord length from spinal level masks saved one level per file
 (sub-*/ses-*/anat/*_label-SC_desc-<level>_mask.nii.gz, e.g. desc-L1 ... desc-S2), and plots:
     - the length per subject
