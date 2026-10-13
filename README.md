@@ -15,7 +15,6 @@ All scripts require SCT (they use the SCT Python environment).
 |---|---|
 | `01_run_batch_rootlets_spinal_levels.sh` | Cervical, per subject (run with `sct_run_batch`): spinal cord segmentation, PMJ detection, rootlets segmentation, and spinal levels with their distances from the PMJ. Manual labels in `derivatives/labels` are used when available. |
 | `02_compute_cervical_midpoints_distance.py` | Cervical: aggregates the results across subjects, computes the C2–C8 midpoints distance and plots it. |
-| `03_compute_lumbar_midpoints_distance.py` | Lumbar: computes the L1–S1 midpoints distance from labeled spinal cord segmentations and plots it. |
 | `config_01_run_batch_rootlets_spinal_levels.json` | `sct_run_batch` config listing the spine-generic subjects with manual rootlets and spinal cord segmentations. |
 
 Spinal levels for the cervical analysis are computed by
@@ -58,23 +57,24 @@ Outputs across subjects (in the folder passed to `-i`):
 - `spinal_levels_midpoints_distance_2-8_spine-generic.csv`: C2–C8 midpoints distance (mm) per subject
 - `figure_spinal_levels_midpoints_distance_2-8.png`: C2–C8 midpoints distance per subject
 
-## Lumbar: L1–S1
+## Lumbar Balgrist dataset
 
-Input: manually labeled spinal cord segmentations (`sub-*/*_spinallevels_dseg.nii.gz`) with one value per spinal
-level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5, 6=S1, 7=S2.
+Scripts for the lumbar Balgrist dataset are in [`lumbar-balgrist/`](lumbar-balgrist). Input: manually labeled spinal
+cord segmentations (`sub-*/*_spinallevels_dseg.nii.gz`) with one value per spinal level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5,
+6=S1, 7=S2.
 
-The midpoint of each level is the center of mass along the superior-inferior axis, and the total L1–S1 distance 
-is the number of slices between the L1 and S1 midpoints multiplied by the slice thickness.
+| Script | What it does |
+|---|---|
+| `lumbar-balgrist/lumbar_length_count_slices.py` | Computes the lumbar spinal cord length by counting axial slices (`-metric top-bottom`: top of L1 to bottom of L5, default; `-metric midpoints`: L1–S1 midpoints distance) and plots it per subject. |
+| `lumbar-balgrist/correlation_length_height.py` | Plots the correlation between the length and subject height. |
 
 ```bash
-python 03_compute_lumbar_midpoints_distance.py -i <folder with sub-*/*_spinallevels_dseg.nii.gz>
+python lumbar-balgrist/lumbar_length_count_slices.py -i <folder with sub-*/*_spinallevels_dseg.nii.gz>
+python lumbar-balgrist/correlation_length_height.py -i <folder>/lumbar_length_L1-L5.csv
 ```
 
-Outputs (in the folder passed to `-i`):
-
-- `lumbar_midpoints_distance_L1-S1.csv`: L1–S1 midpoints distance (mm) per subject, and the min slice, max slice and
-  midpoint slice of each spinal level
-- `figure_lumbar_midpoints_distance_L1-S1.png`: L1–S1 midpoints distance per subject
+Outputs (in the folder passed to `-i`): `lumbar_<metric>.csv` (length per subject, and the min slice, max slice and
+midpoint slice of each spinal level) and `figure_lumbar_<metric>.png`.
 
 ## Lumbar EPFL dataset
 

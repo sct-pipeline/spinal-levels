@@ -8,14 +8,14 @@ This script computes a lumbar spinal cord length from spinal level masks saved o
 
 NOTE:
 Axial slices are counted along the superior-inferior (S-I) axis and multiplied by the slice thickness (S-I voxel size),
-i.e., the same logic as ../03_compute_lumbar_midpoints_distance.py and../04_compute_lumbar_length_topL1_bottom_L5.py,
+i.e., the same logic as ../lumbar-balgrist/lumbar_length_count_slices.py (Balgrist data, same -metric options),
 assuming that the spinal cord is approximately straight:
 
 Two metrics are available (argument -metric);
     - top-bottom (default): length from the top of L1 to the bottom of L5 = (most superior slice of L1 - most inferior
-      slice of L5 + 1) x slice thickness, i.e., both end slices included (as in 04)
+      slice of L5 + 1) x slice thickness, i.e., both end slices included
     - midpoints: distance between the L1 and S1 midpoints = (center of mass slice of L1 - center of mass slice of S1)
-      x slice thickness (as in 03)
+      x slice thickness
 
 Input:
 - folder with the spinal level masks (one level per file)
@@ -51,10 +51,10 @@ from spinalcordtoolbox.image import Image
 
 # Metrics: first and last spinal level, the point used on each level, and labels for the outputs and figures
 METRICS = {
-    # Both end slices included in the length (as in 04_compute_lumbar_length_topL1_bottom_L5.py)
+    # Both end slices included in the length
     'top-bottom': {'first': 'L1', 'last': 'L5', 'point_first': 'top', 'point_last': 'bottom', 'add_slice': True,
                    'name': 'length_L1-L5', 'label': 'Length top L1 – bottom L5'},
-    # Distance between the centers of mass (as in 03_compute_lumbar_midpoints_distance.py)
+    # Distance between the centers of mass
     'midpoints': {'first': 'L1', 'last': 'S1', 'point_first': 'center', 'point_last': 'center', 'add_slice': False,
                   'name': 'midpoints_distance_L1-S1', 'label': 'Distance L1–S1 midpoints'},
 }

@@ -1,8 +1,13 @@
 """
-This script computes the length from the top of L1 to the bottom of L5 from labeled spinal cord segmentations.
+TL;DR: Compute a lumbar spinal cord length by counting axial slices and multiplying by slice thickness.
 
-The top of L1 is its most superior slice and the bottom of L5 is its most inferior slice. The length is then the number
-of slices from the top of L1 to the bottom of L5 (both included) multiplied by the slice thickness.
+This script computes a lumbar spinal cord length from labeled spinal cord segmentations. Two metrics are available
+(-metric); both count slices along the superior-inferior (S-I) axis and multiply by the slice thickness (S-I voxel
+size), assuming that the spinal cord is approximately straight:
+    - top-bottom (default): length from the top of L1 to the bottom of L5 = (most superior slice of L1 - most inferior
+      slice of L5 + 1) x slice thickness, i.e., both end slices included
+    - midpoints: distance between the L1 and S1 midpoints = (center of mass slice of L1 - center of mass slice of S1)
+      x slice thickness
 
 TODO: include also the centerline-based length to account for spinal cord curvature
 
@@ -10,17 +15,18 @@ Input:
 - folder with manually labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz) with one value per
 spinal level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5, 6=S1, 7=S2.
 
-Output (saved to the input folder):
-    - lumbar_length_L1-L5.csv: length from the top of L1 to the bottom of L5 for each subject, and the min slice and
-      max slice of each spinal level
-    - figure_lumbar_length_L1-L5.png: the same length plotted per subject
+Output (saved to the input folder; <metric> is length_L1-L5 or midpoints_distance_L1-S1):
+    - lumbar_<metric>.csv: length for each subject, and the min slice, max slice and midpoint slice of each spinal
+      level
+    - figure_lumbar_<metric>.png: the same length plotted per subject
 
 The script requires the SCT conda environment to be activated:
     source ${SCT_DIR}/python/etc/profile.d/conda.sh
     conda activate venv_sct
 
 Example:
-    python 04_compute_lumbar_length_topL1_bottom_L5.py -i spinal_level_segmentation_L1-S2
+    python lumbar_length_count_slices.py -i spinal_level_segmentation_L1-S2
+    python lumbar_length_count_slices.py -i spinal_level_segmentation_L1-S2 -metric midpoints
 
 Author: Jan Valosek
 """
@@ -35,8 +41,12 @@ import matplotlib.pyplot as plt
 from spinalcordtoolbox.image import Image
 
 LEVELS = {1: 'L1', 2: 'L2', 3: 'L3', 4: 'L4', 5: 'L5', 6: 'S1', 7: 'S2'}
-FIRST_LEVEL = 1  # L1
-LAST_LEVEL = 5   # L5
+
+# Metrics: first and last spinal level (values in the segmentation), and names for the outputs and figures
+METRICS = {
+    'top-bottom': {'first': 1, 'last': 5, 'name': 'length_L1-L5', 'label': 'Length top L1 – bottom L5'},
+    'midpoints': {'first': 1, 'last': 6, 'name': 'midpoints_distance_L1-S1', 'label': 'Distance L1–S1 midpoints'},
+}
 
 FONT_SIZE = 14
 
@@ -50,49 +60,55 @@ SEX_STYLE = {'F': {'color': '#2a78d6', 'marker': 'o', 'label': 'Female'},
              'M': {'color': '#eb6834', 'marker': 's', 'label': 'Male'}}
 
 
-def compute_length(fname):
+def compute_length(fname, metric_name):
     """
-    Compute the length (in mm) from the top of FIRST_LEVEL to the bottom of LAST_LEVEL for one segmentation.
+    Compute the length (in mm) for one segmentation.
     :param fname: path to the labeled spinal cord segmentation
-    :return: dict with the length in mm (NaN if one of the levels is missing) and, for each level, its min slice and
-    max slice (NaN if the level is missing)
+    :param metric_name: key of METRICS
+    :return: dict with the length in mm (NaN if one of the levels is missing) and, for each level, its min slice,
+    max slice and midpoint slice (NaN if the level is missing)
     """
+    metric = METRICS[metric_name]
+    first, last = LEVELS[metric['first']], LEVELS[metric['last']]
     # Load the image and reorient it to RPI, so that the third axis is the S-I axis (slice 0 is the most inferior)
     img = Image(fname).change_orientation('RPI')
     data = img.data
     slice_thickness = img.dim[6]  # pz, slice thickness in mm
 
-    # Min (most inferior) and max (most superior) slice of each spinal level
-    row = {f'length_{LEVELS[FIRST_LEVEL]}-{LEVELS[LAST_LEVEL]}_mm': np.nan}
+    # Min (most inferior) slice, max (most superior) slice and center of mass of each spinal level along the S-I axis
+    row = {f"{metric['name']}_mm": np.nan}
     for value, name in LEVELS.items():
         z = np.where(data == value)[2]  # S-I index of each voxel of this level
         if len(z) == 0:
             print(f'  {name}: not found')
-            row.update({f'{name}_slice_min': np.nan, f'{name}_slice_max': np.nan})
+            row.update({f'{name}_slice_min': np.nan, f'{name}_slice_max': np.nan, f'{name}_midpoint_slice': np.nan})
             continue
-        row.update({f'{name}_slice_min': z.min(), f'{name}_slice_max': z.max()})
-        print(f'  {name}: slices {z.min()}-{z.max()}')
+        row.update({f'{name}_slice_min': z.min(), f'{name}_slice_max': z.max(), f'{name}_midpoint_slice': z.mean()})
+        print(f'  {name}: midpoint at slice {z.mean():.1f} (slices {z.min()}-{z.max()})')
 
-    top = row[f'{LEVELS[FIRST_LEVEL]}_slice_max']      # top of L1
-    bottom = row[f'{LEVELS[LAST_LEVEL]}_slice_min']    # bottom of L5
-    if np.isnan(top) or np.isnan(bottom):
-        print(f'  WARNING: {LEVELS[FIRST_LEVEL]} or {LEVELS[LAST_LEVEL]} missing; the length will be NaN.')
+    if np.isnan(row[f'{first}_slice_min']) or np.isnan(row[f'{last}_slice_min']):
+        print(f'  WARNING: {first} or {last} missing; the length will be NaN.')
         return row
 
-    # Length = number of slices from the top of L1 to the bottom of L5 (both included) x slice thickness
-    n_slices = top - bottom + 1
-    row[f'length_{LEVELS[FIRST_LEVEL]}-{LEVELS[LAST_LEVEL]}_mm'] = n_slices * slice_thickness
-    print(f'  Length top {LEVELS[FIRST_LEVEL]} - bottom {LEVELS[LAST_LEVEL]}: {n_slices} slices x '
-          f'{slice_thickness:.2f} mm = {n_slices * slice_thickness:.1f} mm')
+    if metric_name == 'top-bottom':
+        # Number of slices from the top of L1 to the bottom of L5 (both included)
+        n_slices = row[f'{first}_slice_max'] - row[f'{last}_slice_min'] + 1
+    else:
+        # Number of slices between the L1 and S1 midpoints
+        n_slices = row[f'{first}_midpoint_slice'] - row[f'{last}_midpoint_slice']
+    row[f"{metric['name']}_mm"] = n_slices * slice_thickness
+    print(f"  {metric['label']}: {n_slices:.1f} slices x {slice_thickness:.2f} mm = "
+          f"{n_slices * slice_thickness:.1f} mm")
 
     return row
 
 
-def generate_figure(df, dir_path):
+def generate_figure(df, dir_path, metric):
     """
     Generate a figure with subjects on the x-axis and the length on the y-axis.
-    :param df: dataframe with 'subject' and length columns
+    :param df: dataframe with 'subject' and '<metric name>_mm' columns
     :param dir_path: path to the output folder where the figure will be saved
+    :param metric: dict from METRICS
     The dataframe must also contain a 'sex' column ('F'/'M') used to color the points.
     """
     df_plot = df
@@ -100,7 +116,7 @@ def generate_figure(df, dir_path):
     fig, ax = plt.subplots(figsize=(max(6, len(df_plot) * 0.6), 5))
     # Points colored by sex; subjects without sex information in gray
     x = np.arange(1, len(df_plot) + 1)
-    y = (df_plot[f'length_{LEVELS[FIRST_LEVEL]}-{LEVELS[LAST_LEVEL]}_mm']).to_numpy() / 10  # convert mm to cm for plotting
+    y = (df_plot[f"{metric['name']}_mm"]).to_numpy() / 10  # convert mm to cm for plotting
     for sex, style in SEX_STYLE.items():
         mask = (df_plot['sex'] == sex).to_numpy()
         ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=50, zorder=3,
@@ -116,7 +132,7 @@ def generate_figure(df, dir_path):
     ax.set_xlim(0.5, len(df) + 0.5)
     ax.set_ylim(0, 12)
 
-    ax.set_ylabel(f'Length top {LEVELS[FIRST_LEVEL]} – bottom {LEVELS[LAST_LEVEL]} [cm]', fontsize=FONT_SIZE)
+    ax.set_ylabel(f"{metric['label']} [cm]", fontsize=FONT_SIZE)
     ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
     ax.tick_params(axis='x', labelsize=FONT_SIZE - 2)
     ax.grid(axis='y', alpha=0.2)
@@ -129,32 +145,37 @@ def generate_figure(df, dir_path):
 
     plt.tight_layout()
 
-    fname_figure = os.path.join(dir_path, f'figure_lumbar_length_{LEVELS[FIRST_LEVEL]}-{LEVELS[LAST_LEVEL]}.png')
+    fname_figure = os.path.join(dir_path, f"figure_lumbar_{metric['name']}.png")
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     plt.show()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Compute the length from the top of L1 to the bottom of L5.')
+    parser = argparse.ArgumentParser(description='Compute a lumbar spinal cord length from labeled spinal cord '
+                                                 'segmentations by counting axial slices.')
     parser.add_argument('-i', required=True,
                         help='Folder with labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz).')
+    parser.add_argument('-metric', choices=list(METRICS), default='top-bottom',
+                        help='top-bottom: length from the top of L1 to the bottom of L5; midpoints: distance between '
+                             'the L1 and S1 midpoints. Default: top-bottom.')
     parser.add_argument('-xlsx', default=PARTICIPANTS_XLSX,
                         help=f'Excel file with the subject sex (used to color the points). '
                              f'Default: {PARTICIPANTS_XLSX}')
     args = parser.parse_args()
     dir_path = os.path.abspath(args.i)
+    metric = METRICS[args.metric]
 
     # Compute the length for each subject
     rows = []
     for fname in sorted(glob.glob(os.path.join(dir_path, '**', '*_spinallevels_dseg.nii.gz'), recursive=True)):
         subject = os.path.basename(fname).split('_')[0]
         print(subject)
-        rows.append({'subject': subject, **compute_length(fname)})
+        rows.append({'subject': subject, **compute_length(fname, args.metric)})
     df = pd.DataFrame(rows)
 
     # Save the lengths to a CSV file
-    fname_csv = os.path.join(dir_path, f'lumbar_length_{LEVELS[FIRST_LEVEL]}-{LEVELS[LAST_LEVEL]}.csv')
+    fname_csv = os.path.join(dir_path, f"lumbar_{metric['name']}.csv")
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
@@ -165,7 +186,7 @@ def main():
     df = df.merge(df_sex[['Participants', 'sex']], how='left', left_on='subject', right_on='Participants')
 
     # Plot the length per subject
-    generate_figure(df, dir_path)
+    generate_figure(df, dir_path, metric)
 
 
 if __name__ == '__main__':
