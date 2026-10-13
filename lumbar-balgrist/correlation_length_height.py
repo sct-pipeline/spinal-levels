@@ -25,6 +25,7 @@ Author: Jan Valosek
 """
 
 import os
+import re
 import argparse
 import numpy as np
 import pandas as pd
@@ -130,10 +131,14 @@ def main():
             f'n = {len(df)}\nSpearman ρ = {rho:.2f} [95% CI {rho_lo:.2f}, {rho_hi:.2f}], p = {p:.3f}',
             transform=ax.transAxes, fontsize=FONT_SIZE - 4, va='top')
 
-    # Y-axis label from the length column, e.g. 'midpoints_distance_L1-S1_mm' -> 'Distance L1–S1 midpoints [cm]'
-    levels = length_column.split('_')[-2].replace('-', '–')
-    ylabel = f'Distance {levels} midpoints [cm]' if length_column.startswith('midpoints_distance_') \
-        else f'Length {levels} [cm]'
+    # Y-axis label from the length column, e.g. 'midpoints_distance_L1-S1_mm' -> 'Distance L1–S1 midpoints [cm]',
+    # 'length_L1-L5_centerline_mm' -> 'Length L1–L5 (centerline) [cm]'
+    levels = re.search(r'[LS]\d-[LS]\d', length_column).group().replace('-', '–')
+    ylabel = f'Distance {levels} midpoints' if length_column.startswith('midpoints_distance_') \
+        else f'Length {levels}'
+    if '_centerline' in length_column:
+        ylabel += ' (centerline)'
+    ylabel += ' [cm]'
 
     ax.set_xlabel('Height [cm]', fontsize=FONT_SIZE)
     ax.xaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))  # integer ticks for height

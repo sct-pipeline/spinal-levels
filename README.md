@@ -66,6 +66,7 @@ cord segmentations (`sub-*/*_spinallevels_dseg.nii.gz`) with one value per spina
 | Script | What it does |
 |---|---|
 | `lumbar-balgrist/lumbar_length_count_slices.py` | Computes the lumbar spinal cord length by counting axial slices (`-metric top-bottom`: top of L1 to bottom of L5, default; `-metric midpoints`: L1–S1 midpoints distance) and plots it per subject. |
+| `lumbar-balgrist/lumbar_length_along_centerline.py` | Same lengths, but measured along the spinal cord centerline (SCT `get_centerline`, `ParamCenterline`: bspline, smooth=30, fitted to the L1–S2 segmentation) to account for the cord curvature; also saves the fitted centerlines for QC. |
 | `lumbar-balgrist/correlation_length_height.py` | Plots the correlation between the length and subject height. |
 
 ```bash
