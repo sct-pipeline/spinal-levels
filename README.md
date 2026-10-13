@@ -85,10 +85,11 @@ height) one level above the masks folder.
 
 | Script | What it does |
 |---|---|
-| `lumbar-epfl/lumbar_midpoints_distance_masks.py` | Computes the lumbar spinal cord length (`-metric top-bottom`: top of L1 to bottom of L5, default; `-metric midpoints`: L1–S1 midpoints distance), plots it per subject and its correlation with height. |
+| `lumbar-epfl/lumbar_length_count_slices.py` | Computes the lumbar spinal cord length (`-metric top-bottom`: top of L1 to bottom of L5, default; `-metric midpoints`: L1–S1 midpoints distance), plots it per subject and its correlation with height. |
+| `lumbar-epfl/lumbar_length_along_centerline.py` | Same lengths, but measured along the spinal cord centerline (SCT `get_centerline`, `ParamCenterline`: bspline, smooth=30) to account for the cord curvature; also saves the fitted centerlines for QC. |
 
 ```bash
-python lumbar-epfl/lumbar_midpoints_distance_masks.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
+python lumbar-epfl/lumbar_length_count_slices.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
 ```
 
 Outputs (in the current working directory): `lumbar_<metric>_masks.csv`, `figure_lumbar_<metric>_masks.png` and
