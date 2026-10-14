@@ -70,11 +70,12 @@ cord segmentations (`sub-*/*_spinallevels_dseg.nii.gz`) with one value per spina
 | `lumbar-balgrist/correlation_length_height.py` | Plots the correlation between the length and subject height. |
 
 ```bash
-python lumbar-balgrist/lumbar_length_count_slices.py -i <folder with sub-*/*_spinallevels_dseg.nii.gz>
-python lumbar-balgrist/correlation_length_height.py -i <folder>/lumbar_length_L1-L5.csv
+python lumbar-balgrist/lumbar_length_count_slices.py -i <folder with sub-*/*_spinallevels_dseg.nii.gz> -o <output folder>
+python lumbar-balgrist/correlation_length_height.py -i <output folder>/lumbar_length_L1-L5.csv
 ```
 
-Outputs (in the folder passed to `-i`): `lumbar_<metric>.csv` (length per subject, and the min slice, max slice and
+Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures`):
+`lumbar_<metric>.csv` (length per subject, and the min slice, max slice and
 midpoint slice of each spinal level) and `figure_lumbar_<metric>.png`.
 
 ## Lumbar EPFL dataset

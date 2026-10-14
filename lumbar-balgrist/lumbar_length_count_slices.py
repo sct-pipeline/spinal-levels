@@ -15,7 +15,8 @@ Input:
 - folder with manually labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz) with one value per
 spinal level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5, 6=S1, 7=S2.
 
-Output (saved to the input folder; <metric> is length_L1-L5 or midpoints_distance_L1-S1):
+Output (saved to the -o folder, default: ~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures;
+<metric> is length_L1-L5 or midpoints_distance_L1-S1):
     - lumbar_<metric>.csv: length for each subject, and the min slice, max slice and midpoint slice of each spinal
       level
     - figure_lumbar_<metric>.png: the same length plotted per subject
@@ -25,8 +26,8 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Example:
-    python lumbar_length_count_slices.py -i spinal_level_segmentation_L1-S2
-    python lumbar_length_count_slices.py -i spinal_level_segmentation_L1-S2 -metric midpoints
+    python lumbar_length_count_slices.py
+    python lumbar_length_count_slices.py -metric midpoints
 
 Author: Jan Valosek
 """
@@ -40,7 +41,7 @@ import pandas as pd
 from spinalcordtoolbox.image import Image
 
 # Metric definitions, Excel file with the subject sex and height, and plotting shared by the lumbar length scripts
-from utils import LEVELS, METRICS, PARTICIPANTS_XLSX, add_sex_height, generate_figure
+from utils import LEVELS, METRICS, INPUT_DIR, OUTPUT_DIR, PARTICIPANTS_XLSX, add_sex_height, generate_figure
 
 
 def compute_length(fname, metric_name):
@@ -89,8 +90,11 @@ def compute_length(fname, metric_name):
 def main():
     parser = argparse.ArgumentParser(description='Compute a lumbar spinal cord length from labeled spinal cord '
                                                  'segmentations by counting axial slices.')
-    parser.add_argument('-i', required=True,
-                        help='Folder with labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz).')
+    parser.add_argument('-i', default=INPUT_DIR,
+                        help='Folder with labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz). '
+                             f'Default: {INPUT_DIR}')
+    parser.add_argument('-o', default=OUTPUT_DIR,
+                        help=f'Output folder for the CSV file and the figure. Default: {OUTPUT_DIR}')
     parser.add_argument('-metric', choices=list(METRICS), default='top-bottom',
                         help='top-bottom: length from the top of L1 to the bottom of L5; midpoints: distance between '
                              'the L1 and S1 midpoints. Default: top-bottom.')
@@ -98,7 +102,9 @@ def main():
                         help=f'Excel file with the subject sex and height (used to color and sort the points). '
                              f'Default: {PARTICIPANTS_XLSX}')
     args = parser.parse_args()
-    dir_path = os.path.abspath(args.i)
+    dir_path = os.path.abspath(os.path.expanduser(args.i))
+    dir_out = os.path.abspath(os.path.expanduser(args.o))
+    os.makedirs(dir_out, exist_ok=True)
     metric = METRICS[args.metric]
 
     # Compute the length for each subject
@@ -112,7 +118,7 @@ def main():
     df = pd.DataFrame(rows)
 
     # Save the lengths to a CSV file
-    fname_csv = os.path.join(dir_path, f"lumbar_{metric['name']}.csv")
+    fname_csv = os.path.join(dir_out, f"lumbar_{metric['name']}.csv")
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
@@ -120,7 +126,7 @@ def main():
     df = add_sex_height(df, args.xlsx)
 
     # Plot the length per subject
-    generate_figure(df, dir_path, metric)
+    generate_figure(df, dir_out, metric)
 
 
 if __name__ == '__main__':

@@ -23,10 +23,11 @@ Input:
 - folder with manually labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz) with one value per
 spinal level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5, 6=S1, 7=S2.
 
-Output (saved to the input folder; <metric> is length_L1-L5 or midpoints_distance_L1-S1):
+Output (saved to the -o folder, default: ~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures;
+<metric> is length_L1-L5 or midpoints_distance_L1-S1):
     - lumbar_<metric>_centerline.csv: length along the centerline per subject
     - figure_lumbar_<metric>_centerline.png: the same length plotted per subject
-    - sub-*/*_spinallevels_dseg_centerline.nii.gz: fitted centerline for visual QC (next to each segmentation)
+    - centerline/*_spinallevels_dseg_centerline.nii.gz: fitted centerline for visual QC
 
 The correlation with height can then be plotted with correlation_length_height.py.
 
@@ -35,8 +36,8 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Example:
-    python lumbar_length_along_centerline.py -i spinal_level_segmentation_L1-S2
-    python lumbar_length_along_centerline.py -i spinal_level_segmentation_L1-S2 -metric midpoints
+    python lumbar_length_along_centerline.py
+    python lumbar_length_along_centerline.py -metric midpoints
 
 Author: Jan Valosek
 """
@@ -53,7 +54,7 @@ from spinalcordtoolbox.centerline.core import ParamCenterline, get_centerline
 from spinalcordtoolbox.types import Centerline
 
 # Metric definitions, Excel file with the subject sex and height, and plotting shared by the lumbar length scripts
-from utils import METRICS, PARTICIPANTS_XLSX, add_sex_height, generate_figure
+from utils import METRICS, INPUT_DIR, OUTPUT_DIR, PARTICIPANTS_XLSX, add_sex_height, generate_figure
 
 
 def get_level_slice(data, value, point):
@@ -95,12 +96,13 @@ def fit_centerline(im_seg, param_centerline, fname_out=None, orientation_out='RP
     return Centerline(*points.T, *deriv.T), arr_ctl[2]
 
 
-def compute_length(fname, metric_name, param_centerline):
+def compute_length(fname, metric_name, param_centerline, dir_qc):
     """
     Compute the length along the centerline (in mm) for one segmentation.
     :param fname: path to the labeled spinal cord segmentation
     :param metric_name: key of METRICS
     :param param_centerline: ParamCenterline
+    :param dir_qc: folder where the fitted centerline is saved (for visual QC)
     :return: length in mm (NaN if one of the levels is missing)
     """
     metric = METRICS[metric_name]
@@ -115,7 +117,7 @@ def compute_length(fname, metric_name, param_centerline):
 
     # Centerline in physical space; cumulative length (mm) at each centerline point, from the most inferior one
     centerline, z_ctl = fit_centerline(im_seg, param_centerline,
-                                       fname_out=fname.replace('.nii.gz', '_centerline.nii.gz'),
+                                       fname_out=os.path.join(dir_qc, os.path.basename(fname).replace('.nii.gz', '_centerline.nii.gz')),
                                        orientation_out=Image(fname).orientation)
     length_at_slice = interp1d(z_ctl, centerline.incremental_length, fill_value='extrapolate')
     length = float(length_at_slice(z_first) - length_at_slice(z_last))
@@ -126,8 +128,11 @@ def compute_length(fname, metric_name, param_centerline):
 def main():
     parser = argparse.ArgumentParser(description='Compute a lumbar spinal cord length along the spinal cord centerline '
                                                  'from labeled spinal cord segmentations.')
-    parser.add_argument('-i', required=True,
-                        help='Folder with labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz).')
+    parser.add_argument('-i', default=INPUT_DIR,
+                        help='Folder with labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz). '
+                             f'Default: {INPUT_DIR}')
+    parser.add_argument('-o', default=OUTPUT_DIR,
+                        help=f'Output folder for the CSV file and the figure. Default: {OUTPUT_DIR}')
     parser.add_argument('-metric', choices=list(METRICS), default='top-bottom',
                         help='top-bottom: length from the top of L1 to the bottom of L5; midpoints: distance between '
                              'the L1 and S1 midpoints. Default: top-bottom.')
@@ -140,7 +145,10 @@ def main():
                         help=f'Excel file with the subject sex and height (used to color and sort the points). '
                              f'Default: {PARTICIPANTS_XLSX}')
     args = parser.parse_args()
-    dir_path = os.path.abspath(args.i)
+    dir_path = os.path.abspath(os.path.expanduser(args.i))
+    dir_out = os.path.abspath(os.path.expanduser(args.o))
+    dir_qc = os.path.join(dir_out, 'centerline')
+    os.makedirs(dir_qc, exist_ok=True)
     param_centerline = ParamCenterline(algo_fitting=args.centerline_algo, smooth=args.centerline_smooth, minmax=True)
 
     # Same outputs as the straight version, with '_centerline' in the file and column names
@@ -153,13 +161,13 @@ def main():
         subject = os.path.basename(fname).split('_')[0]
         print(subject)
         rows.append({'subject': subject,
-                     f"{metric['name']}_mm": compute_length(fname, args.metric, param_centerline)})
+                     f"{metric['name']}_mm": compute_length(fname, args.metric, param_centerline, dir_qc)})
     if not rows:
         raise FileNotFoundError(f'No *_spinallevels_dseg.nii.gz files found in {dir_path}. Check the -i path.')
     df = pd.DataFrame(rows)
 
     # Save the lengths to a CSV file
-    fname_csv = os.path.join(dir_path, f"lumbar_{metric['name']}.csv")
+    fname_csv = os.path.join(dir_out, f"lumbar_{metric['name']}.csv")
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
@@ -167,7 +175,7 @@ def main():
     df = add_sex_height(df, args.xlsx)
 
     # Plot the length per subject
-    generate_figure(df, dir_path, metric)
+    generate_figure(df, dir_out, metric)
 
 
 if __name__ == '__main__':

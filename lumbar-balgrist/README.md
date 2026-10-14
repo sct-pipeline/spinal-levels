@@ -1,8 +1,9 @@
 # Lumbar Balgrist
 
 Lumbar spinal cord length (top of L1 to bottom of L5, or L1–S1 midpoints) from manually labeled spinal cord
-segmentations (`sub-*/*_spinallevels_dseg.nii.gz`, 1=L1 ... 7=S2) in
-`~/results/lumbar_rootlets_Balgrist/spinal_level_segmentation_L1-S2`.
+segmentations (`sub-*/*_spinallevels_dseg.nii.gz`, 1=L1 ... 7=S2) in `~/data/spinal-levels/lumbar_rootlets_Balgrist/bids`
+(default `-i`). The CSV files and figures are saved to `~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures`
+(default `-o`).
 
 | Script | What it does |
 |---|---|
@@ -11,9 +12,9 @@ segmentations (`sub-*/*_spinallevels_dseg.nii.gz`, 1=L1 ... 7=S2) in
 | `correlation_length_height.py` | Correlation between the length and subject height. |
 
 ```bash
-python lumbar_length_count_slices.py -i ~/results/lumbar_rootlets_Balgrist/spinal_level_segmentation_L1-S2
-python lumbar_length_along_centerline.py -i ~/results/lumbar_rootlets_Balgrist/spinal_level_segmentation_L1-S2
-python correlation_length_height.py -i ~/results/lumbar_rootlets_Balgrist/spinal_level_segmentation_L1-S2/lumbar_length_L1-L5.csv
+python lumbar_length_count_slices.py
+python lumbar_length_along_centerline.py
+python correlation_length_height.py -i ~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures/lumbar_length_L1-L5.csv
 ```
 
 `lumbar_length_count_slices.py` and `lumbar_length_along_centerline.py` require SCT (`conda activate venv_sct`); add

@@ -21,9 +21,13 @@ METRICS = {
 
 FONT_SIZE = 14
 
-# Excel file with the subject sex and height ('sex' and 'Height (cm)' columns in the 'Spinal level heights (mm)' sheet)
-PARTICIPANTS_XLSX = os.path.expanduser('~/results/lumbar_rootlets_Balgrist/spinal_level_segmentation_L1-S2/'
-                                       'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
+# Data: labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz) and the Excel file with the subject sex
+# and height ('sex' and 'Height (cm)' columns in the 'Spinal level heights (mm)' sheet)
+DATA_DIR = os.path.expanduser('~/data/spinal-levels/lumbar_rootlets_Balgrist')
+INPUT_DIR = os.path.join(DATA_DIR, 'bids')
+PARTICIPANTS_XLSX = os.path.join(INPUT_DIR, 'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
+# Output folder for the CSV files and figures
+OUTPUT_DIR = os.path.join(DATA_DIR, 'results_and_figures')
 PARTICIPANTS_SHEET = 'Spinal level heights (mm)'
 
 # Female and male colors and markers
@@ -72,11 +76,11 @@ def linear_fit_ci_band(x, y, x_fit, alpha=0.05):
     return y_fit, y_fit - t_crit * se_fit, y_fit + t_crit * se_fit
 
 
-def generate_figure(df, dir_path, metric):
+def generate_figure(df, dir_out, metric):
     """
     Generate a figure with subjects on the x-axis (sorted by height) and the length on the y-axis.
     :param df: dataframe with 'subject' and '<metric name>_mm' columns
-    :param dir_path: path to the output folder where the figure will be saved
+    :param dir_out: output folder where the figure will be saved
     :param metric: dict from METRICS
     The dataframe must also contain a 'sex' column ('F'/'M') used to color the points and a 'height' column (cm) used
     to sort the subjects.
@@ -117,7 +121,7 @@ def generate_figure(df, dir_path, metric):
 
     plt.tight_layout()
 
-    fname_figure = os.path.join(dir_path, f"figure_lumbar_{metric['name']}.png")
+    fname_figure = os.path.join(dir_out, f"figure_lumbar_{metric['name']}.png")
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     plt.show()
