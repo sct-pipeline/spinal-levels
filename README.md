@@ -96,3 +96,18 @@ python lumbar-epfl/lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_
 
 Outputs (in the current working directory): `lumbar_<metric>_masks.csv`, `figure_lumbar_<metric>_masks.png` and
 `figure_correlation_lumbar_<metric>_masks_height.png`.
+
+## Lumbar Balgrist + EPFL combined
+
+[`lumbar-combined/combine_balgrist_epfl.py`](lumbar-combined/combine_balgrist_epfl.py) combines the L1–L5 length along
+the centerline of both datasets (CSV files from the two `lumbar_length_along_centerline.py` scripts) into a per-subject
+figure (stratified by sex, sorted by height) and a correlation with height (all subjects pooled). Sex is shown by color
+and the dataset by marker.
+
+```bash
+python lumbar-combined/combine_balgrist_epfl.py
+```
+
+Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/results_and_figures_balgrist_epfl`):
+`lumbar_length_L1-L5_balgrist_epfl.csv`, `figure_lumbar_length_L1-L5_balgrist_epfl.png` and
+`figure_correlation_lumbar_length_L1-L5_balgrist_epfl_height.png`.
