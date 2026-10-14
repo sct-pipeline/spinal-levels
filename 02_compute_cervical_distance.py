@@ -5,12 +5,28 @@ Two distances are supported (`-distance`):
 - midpoint: C8 midpoint distance from the reference minus C2 midpoint distance from the reference
 - total: C8 end (bottom) distance from the reference minus C2 start (top) distance from the reference
 
-Spinal levels can be estimated using rootlets, PAM50, or both (`-method both`); with `-method both`, the two methods
-are shown in one figure (dark color = rootlets, light color = PAM50).
+Spinal levels can be estimated using rootlets or PAM50 (`-method`).
+
+Multiple datasets are supported: pass one results folder per dataset to `-i` and the matching participants.tsv files
+(same order) to `-participants`. The height column can be named 'height (cm)', 'height_cm' or 'height' (heights in
+meters are converted to cm automatically). Results of all datasets are combined into one CSV file and one figure.
+
+Figure layout:
+- color = sex (blue = female, orange = male, gray = unknown)
+- marker = dataset (circle = first dataset, triangle = second dataset, then square, diamond, ...)
+- x-axis: females first (sorted by height), then males (sorted by height), separated by a dashed line
+Subjects with missing height or sex are excluded; a summary of included/excluded subjects per dataset is printed.
+
+Example:
+    python compute_c2_c8_distance.py \
+        -i ~/results/data-multi-subject ~/results/dataset2 \
+        -participants ~/data/data-multi-subject/participants.tsv ~/data/dataset2/participants.tsv \
+        -method rootlets
 
 Output:
-- CSV file with the distance between the C2 and C8 levels for each subject (one row per subject), per method
-- Figure with the distance for each subject (subjects sorted by height on x-axis, distance on y-axis)
+- CSV file with the distance between the C2 and C8 levels for each subject (one row per subject), per method and
+  dataset, plus one combined CSV file across all datasets
+- Figure with the distance for each subject (all datasets in one figure)
 
 The script was inspired by script '03a_generate_figure_inter_rater_variablity-PMJ_COV.py':
 https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/03a_generate_figure_inter_rater_variablity-PMJ_COV.py
@@ -23,6 +39,8 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 
 FONT_SIZE = 14
@@ -37,17 +55,21 @@ METHODS = ['rootlets', 'PAM50']
 # Column with the per-subject distance for each distance type
 DISTANCE_COL = {'midpoint': 'midpoints_distance_mm', 'total': 'total_distance_mm'}
 
-# participants.tsv with the subject sex
+# Default participants.tsv with the subject sex and height (first dataset)
 PARTICIPANTS_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/data-multi-subject/participants.tsv')
 
-# Female and male colors and markers (single-method figure)
-SEX_STYLE = {'F': {'color': '#2a78d6', 'marker': 'o', 'label': 'Female'},
-             'M': {'color': '#eb6834', 'marker': 's', 'label': 'Male'}}
+# Accepted names of the height column in participants.tsv (first match is used)
+HEIGHT_COLUMNS = ['height (cm)', 'height_cm', 'height']
+# Unified height column used internally (always in cm)
+HEIGHT_COL = 'height_cm'
 
-# Colors for the figure with both methods: dark = rootlets, light = PAM50
-METHOD_COLORS = {'F': {'rootlets': '#1f4e9c', 'PAM50': '#9ec5f0'},
-                 'M': {'rootlets': '#a51c1c', 'PAM50': '#f2a0a0'},
-                 'unknown': {'rootlets': '#555555', 'PAM50': '#bbbbbb'}}
+# Sex groups in the order they appear on the x-axis, their labels and colors (single-method figure)
+SEX_ORDER = ['F', 'M', 'unknown']
+SEX_LABEL = {'F': 'Female', 'M': 'Male', 'unknown': 'Sex unknown'}
+SEX_COLOR = {'F': '#2a78d6', 'M': '#eb6834', 'unknown': 'gray'}
+
+# Markers per dataset (in the order of -i): circle, triangle, then square, diamond, ...
+DATASET_MARKERS = ['o', '^', 's', 'D', 'v', 'P']
 
 
 def get_parser():
@@ -56,29 +78,67 @@ def get_parser():
     :return: command line arguments
     """
     parser = argparse.ArgumentParser(description='Compute the distance between the C2 and C8 spinal levels '
-                                                 'for each subject, save it to a CSV file and plot it.',
+                                                 'for each subject of one or more datasets, save it to CSV files '
+                                                 'and plot all datasets in one figure.',
                                      prog=os.path.basename(__file__).strip('.py'))
     parser.add_argument('-i',
                         required=True,
+                        nargs='+',
                         type=str,
-                        help='Path to the results (or data_processed) folder with CSV files for individual '
+                        help='Path(s) to the results (or data_processed) folder(s) with CSV files for individual '
                              'subjects and spinal level estimation generated by the '
-                             'rootlets_to_spinal_levels.py script. The output CSV files '
-                             'and figure are saved to the current working directory.')
+                             'rootlets_to_spinal_levels.py script. One folder per dataset.')
+    parser.add_argument('-participants', nargs='+', default=[PARTICIPANTS_TSV],
+                        help=f'participants.tsv file(s) with the subject sex and height, one per dataset, in the '
+                             f'same order as -i. The height column can be named {HEIGHT_COLUMNS}. '
+                             f'Default: {PARTICIPANTS_TSV}')
+    parser.add_argument('-dataset-names', nargs='+', default=None,
+                        help='Short name for each dataset (same order as -i), used in the output file names and '
+                             'the figure legend. Default: name of the folder containing each participants.tsv.')
     parser.add_argument('-reference', choices=['pmj', 'c2'], default='c2',
                         help='Reference point for distance computation. Default: c2')
-    parser.add_argument('-method', choices=METHODS + ['both'], default='rootlets',
-                        help='Method for spinal level estimation. "both" plots rootlets and PAM50 in one figure. '
-                             'Default: rootlets')
+    parser.add_argument('-method', choices=METHODS, default='PAM50',
+                        help='Method for spinal level estimation. Default: PAM50')
     parser.add_argument('-distance', choices=['midpoint', 'total'], default='total',
                         help='Distance to compute. Default: total')
-    parser.add_argument('-participants', default=PARTICIPANTS_TSV,
-                        help=f'participants.tsv file with the subject sex and height (used to color and sort the '
-                             f'points). Default: {PARTICIPANTS_TSV}')
     parser.add_argument('-output-folder', default=os.getcwd() + "/figures-and-dataframes",
                         help='Path to the output folder where the CSV files and figure will be saved. '
                              'Default: current working directory.')
     return parser
+
+
+def load_participants(fname_participants):
+    """
+    Load participants.tsv and return a dataframe with unified columns: participant_id, sex ('F', 'M' or NaN) and
+    height_cm (numeric, in cm). The height column can be named 'height (cm)', 'height_cm' or 'height'.
+    :param fname_participants: path to participants.tsv
+    :return: dataframe with columns participant_id, sex, height_cm
+    """
+    df = pd.read_csv(fname_participants, sep='\t')
+    if 'participant_id' not in df.columns:
+        raise ValueError(f'No "participant_id" column in {fname_participants}.')
+
+    # Height: use the first matching column, convert to numeric ('n/a' etc. become NaN)
+    height_col = next((col for col in HEIGHT_COLUMNS if col in df.columns), None)
+    if height_col is None:
+        print(f'WARNING: no height column ({HEIGHT_COLUMNS}) in {fname_participants}; height will be unknown.')
+        df[HEIGHT_COL] = np.nan
+    else:
+        df[HEIGHT_COL] = pd.to_numeric(df[height_col], errors='coerce')
+        # Heights stored in meters (e.g. 1.75) are converted to cm
+        if df[HEIGHT_COL].notna().any() and df[HEIGHT_COL].median() < 3:
+            print(f'INFO: height in {fname_participants} looks like meters; converting to cm.')
+            df[HEIGHT_COL] = df[HEIGHT_COL] * 100
+
+    # Sex: normalize to 'F' / 'M' (e.g. 'female', 'f', 'Male' -> 'F', 'F', 'M'); anything else becomes NaN
+    if 'sex' in df.columns:
+        sex = df['sex'].astype(str).str.strip().str.upper().str[0]
+        df['sex'] = sex.where(sex.isin(['F', 'M']))
+    else:
+        print(f'WARNING: no "sex" column in {fname_participants}; sex will be unknown.')
+        df['sex'] = np.nan
+
+    return df[['participant_id', 'sex', HEIGHT_COL]]
 
 
 def compute_midpoints_distance(df, reference, first_level=FIRST_LEVEL, last_level=LAST_LEVEL):
@@ -91,11 +151,7 @@ def compute_midpoints_distance(df, reference, first_level=FIRST_LEVEL, last_leve
     :param last_level: last spinal level
     :return: dataframe with one row per subject
     """
-    if reference == 'c2':
-        added_ref = reference + '_top'
-
-    else:
-        added_ref = reference
+    added_ref = f'{reference}_top' if reference == 'c2' else reference
     df_pivot = df.pivot_table(index='subject', columns='spinal_level', values=f'distance_from_{added_ref}_midpoint')
 
     rows = []
@@ -156,13 +212,15 @@ def compute_total_distance(df, reference, first_level=FIRST_LEVEL, last_level=LA
     return pd.DataFrame(rows)
 
 
-def load_spinal_levels(dir_path, reference, method, out_dir):
+def load_spinal_levels(dir_path, reference, method, out_dir, dataset):
     """
-    Load and aggregate the per-subject CSV files generated by the rootlets_to_spinal_levels.py script for one method.
+    Load and aggregate the per-subject CSV files generated by the rootlets_to_spinal_levels.py script for one method
+    and one dataset.
     :param dir_path: path to the folder with the per-subject CSV files
     :param reference: reference point for distance computation
     :param method: method for spinal level estimation
     :param out_dir: path to the output folder where the aggregated CSV file will be saved
+    :param dataset: dataset name (used in the output file name)
     :return: dataframe with one row per subject and spinal level (C2-C8)
     """
     # Get all the CSV files generated by the rootlets_to_spinal_levels.py script
@@ -183,15 +241,15 @@ def load_spinal_levels(dir_path, reference, method, out_dir):
     # sort df by subject and spinal level
     df = df.sort_values(by=['subject', 'spinal_level'])
 
-    # Save dataframe with all subjects to CSV file
-    fname_out = os.path.join(out_dir, f'spinal_levels_ref_{reference}_method_{method}.csv')
+    # Save dataframe with all subjects of this dataset to CSV file
+    fname_out = os.path.join(out_dir, f'spinal_levels_ref_{reference}_method_{method}_{dataset}.csv')
     df.to_csv(fname_out, index=False)
     print(f'CSV file saved in {fname_out}.')
 
     return df
 
 
-def compute_and_save_distance(df, reference, method, distance, out_dir):
+def compute_and_save_distance(df, reference, method, distance, out_dir, dataset):
     """
     Compute the per-subject distance (midpoint or total) between FIRST_LEVEL and LAST_LEVEL and save it to a CSV file.
     :param df: dataframe returned by load_spinal_levels()
@@ -199,206 +257,236 @@ def compute_and_save_distance(df, reference, method, distance, out_dir):
     :param method: method for spinal level estimation
     :param distance: distance to compute ('midpoint' or 'total')
     :param out_dir: path to the output folder where the CSV file will be saved
-    :return: dataframe with one row per subject and a 'method' column
+    :param dataset: dataset name (used in the output file name)
+    :return: dataframe with one row per subject and 'method' and 'dataset' columns
     """
     if distance == 'midpoint':
         df_distance = compute_midpoints_distance(df, reference, FIRST_LEVEL, LAST_LEVEL)
         fname_csv = os.path.join(out_dir, f'spinal_levels_midpoints_distance_{FIRST_LEVEL}-{LAST_LEVEL}'
-                                          f'_ref_{reference}_method_{method}.csv')
+                                          f'_ref_{reference}_method_{method}_{dataset}.csv')
     else:
         df_distance = compute_total_distance(df, reference, FIRST_LEVEL, LAST_LEVEL)
         fname_csv = os.path.join(out_dir, f'spinal_levels_total_distance_{FIRST_LEVEL}-{LAST_LEVEL}'
-                                          f'_ref_{reference}_method_{method}.csv')
+                                          f'_ref_{reference}_method_{method}_{dataset}.csv')
     df_distance.to_csv(fname_csv, index=False)
-    print(f'{distance.capitalize()} distance between levels {FIRST_LEVEL} and {LAST_LEVEL} ({method}) '
+    print(f'{distance.capitalize()} distance between levels {FIRST_LEVEL} and {LAST_LEVEL} ({method}, {dataset}) '
           f'saved in {fname_csv}.')
     print(df_distance[['subject', DISTANCE_COL[distance]]].describe())
 
     df_distance['method'] = method
+    df_distance['dataset'] = dataset
     return df_distance
 
 
-def generate_distance_figure(df_midpoints, dir_path, reference, method, distance, first_level=FIRST_LEVEL,
-                                       last_level=LAST_LEVEL, height_col='height (cm)'):
+def order_subjects(df_subjects, height_col=HEIGHT_COL):
     """
-    Generate a figure with subjects on the x-axis (sorted by height) and the distance between the `first_level` and
-    `last_level` midpoints on the y-axis (one point per subject). Subjects without height are placed at the end and
-    separated by a vertical dashed line.
-    :param df_midpoints: dataframe returned by compute_midpoints_distance() with added 'sex' and `height_col` columns
+    Order subjects on the x-axis: females first, then males, then subjects with unknown sex; within each group sorted
+    by height (ascending), subjects without height at the end of their group.
+    :param df_subjects: dataframe with one row per subject and 'sex', 'dataset', 'subject' and `height_col` columns
+    :param height_col: name of the column with subject height (cm)
+    :return: ordered copy with added 'sex_key' and 'x' (1-based x-position) columns
+    """
+    df = df_subjects.copy()
+    df[height_col] = pd.to_numeric(df[height_col], errors='coerce')
+    df['sex_key'] = df['sex'].where(df['sex'].isin(['F', 'M']), 'unknown')
+    df['sex_rank'] = df['sex_key'].map({sex: i for i, sex in enumerate(SEX_ORDER)})
+    df['no_height'] = df[height_col].isna()
+    df = (df.sort_values(['sex_rank', 'no_height', height_col, 'dataset', 'subject'])
+          .drop(columns=['sex_rank']).reset_index(drop=True))
+    df['x'] = np.arange(1, len(df) + 1)
+    return df
+
+
+def get_dataset_markers(datasets):
+    """
+    Assign a marker to each dataset (in the given order): circle, triangle, square, ...
+    """
+    return {dataset: DATASET_MARKERS[i % len(DATASET_MARKERS)] for i, dataset in enumerate(datasets)}
+
+
+def draw_sex_groups(ax, df_ordered):
+    """
+    Draw a dashed vertical line between the sex groups, label each group above the points and draw a dotted line
+    before the subjects without height within each group.
+    :param ax: matplotlib axes
+    :param df_ordered: dataframe returned by order_subjects() (one row per subject)
+    """
+    first_group = True
+    for sex_key in SEX_ORDER:
+        df_group = df_ordered[df_ordered['sex_key'] == sex_key]
+        if df_group.empty:
+            continue
+        x_start, x_end = df_group['x'].min(), df_group['x'].max()
+        # Dashed line between groups
+        if not first_group:
+            ax.axvline(x_start - 0.5, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=2)
+        first_group = False
+        # Group label centered above the group
+        ax.text((x_start + x_end) / 2, 0.98, SEX_LABEL[sex_key], color=SEX_COLOR[sex_key],
+                transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=FONT_SIZE - 3)
+        # Dotted line before subjects without height within the group
+        n_with_height = int((~df_group['no_height']).sum())
+        if 0 < n_with_height < len(df_group):
+            x_sep = x_start + n_with_height - 0.5
+            ax.axvline(x_sep, color='gray', linestyle=':', linewidth=0.8, zorder=2)
+            ax.text(x_sep + 0.15, 0.90, 'height n/a', rotation=90,
+                    transform=ax.get_xaxis_transform(), ha='left', va='top', fontsize=FONT_SIZE - 6,
+                    color='dimgray')
+
+
+def add_legends(ax, color_handles, dataset_markers, df_ordered):
+    """
+    Add one legend in a single row above the plot (upper right): colors (sex) followed by dataset markers.
+    """
+    dataset_handles = [Line2D([], [], linestyle='', marker=marker, color='dimgray', markersize=7,
+                              label=f"{dataset} (n = {(df_ordered['dataset'] == dataset).sum()})")
+                       for dataset, marker in dataset_markers.items()]
+    handles = color_handles + dataset_handles
+    ax.legend(handles=handles, loc='lower right', bbox_to_anchor=(1.0, 1.0), ncol=len(handles), frameon=False,
+              fontsize=FONT_SIZE - 5, handlelength=1.2, columnspacing=1.2, borderaxespad=0.2)
+
+
+def style_axes(ax, n_subjects, distance, first_level, last_level, y_max):
+    """
+    Common axes styling.
+    """
+    ax.set_xlim(0.5, n_subjects + 0.5)
+    ax.set_xlabel('Subjects stratified by sex and sorted by height', fontsize=FONT_SIZE)
+    ax.set_ylim(0, 14)
+    if distance == 'total':
+        ax.set_ylabel(f'Length top C{first_level} – bottom C{last_level} [cm]', fontsize=FONT_SIZE)
+    else:
+        ax.set_ylabel(f'Length midpoint C{first_level} – midpoint C{last_level} [cm]', fontsize=FONT_SIZE)
+    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
+    ax.set_xticks([])  # no tick marks or numbers on the x-axis
+    ax.grid(axis='y', alpha=0.2)
+    ax.set_axisbelow(True)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+
+def generate_distance_figure(df_distance, dir_path, reference, method, distance, first_level=FIRST_LEVEL,
+                             last_level=LAST_LEVEL, height_col=HEIGHT_COL):
+    """
+    Generate a figure with subjects on the x-axis (females first, then males, each sorted by height) and the distance
+    between the `first_level` and `last_level` on the y-axis (one point per subject). Color encodes sex, marker
+    encodes dataset.
+    :param df_distance: dataframe returned by compute_and_save_distance() (all datasets) with added 'sex' and
+    `height_col` columns
     :param dir_path: path to the output folder where the figure will be saved
     :param reference: reference point for distance computation
     :param method: method to use for spinal level estimation
     :param distance: distance to use (midpoints or total C2-C8 distance)
     :param first_level: first spinal level
     :param last_level: last spinal level
-    :param height_col: name of the column with subject height
-    """
-    df_plot = df_midpoints.copy()
-    # Make sure height is numeric (non-numeric entries such as 'n/a' become NaN)
-    df_plot[height_col] = pd.to_numeric(df_plot[height_col], errors='coerce')
-    # Sort by height (ascending); subjects without height go to the end (sorted by subject name)
-    df_plot = df_plot.sort_values([height_col, 'subject'], na_position='last').reset_index(drop=True)
-    n_with_height = int(df_plot[height_col].notna().sum())
-
-    # Fixed figure size; subjects are shown as numbers (no subject names) so the figure stays compact
-    fig, ax = plt.subplots(figsize=(8, 5))
-    # Points colored by sex; subjects without sex information in gray
-    x = np.arange(1, len(df_plot) + 1)
-    y = (df_plot[DISTANCE_COL[distance]]).to_numpy() / 10  # convert mm to cm for plotting
-
-    for sex, style in SEX_STYLE.items():
-        mask = (df_plot['sex'] == sex).to_numpy()
-        ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=30, zorder=3,
-                   label=f"{style['label']} (n = {mask.sum()})")
-    mask = (~df_plot['sex'].isin(list(SEX_STYLE))).to_numpy()
-    if mask.any():
-        ax.scatter(x[mask], y[mask], color='gray', marker='x', s=30, zorder=3,
-                   label=f'Sex unknown (n = {mask.sum()})')
-
-    # Separator between subjects with and without height
-    if 0 < n_with_height < len(df_plot):
-        x_sep = n_with_height + 0.5
-        ax.axvline(x_sep, color='black', linestyle='--', linewidth=0.8, alpha=0.6, zorder=2)
-        ax.text(x_sep + 0.3, 1, f'Height unknown (n = {len(df_plot) - n_with_height})',
-                ha='left', va='top', fontsize=FONT_SIZE - 4, color='dimgray')
-
-    # Subjects sorted by height as numbered x-axis positions
-    ax.set_xlim(0.5, len(df_plot) + 2)
-    ax.set_xlabel(f'Subject sorted by height (n = {len(df_plot)})', fontsize=FONT_SIZE)
-    ax.set_ylim(0, 12)
-
-    ax.set_ylabel(f'{distance.capitalize()} distance C{first_level}–C{last_level} [cm]', fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
-    ax.tick_params(axis='x', labelsize=FONT_SIZE - 2)
-    ax.grid(axis='y', alpha=0.2)
-    ax.set_axisbelow(True)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.legend(loc='lower left', bbox_to_anchor=(0.00, 0.03), ncol=1, frameon=True, fontsize=FONT_SIZE - 4)
-    ax.set_title(f'{distance.capitalize()} distance between C{first_level} and C{last_level} (reference: {reference.upper()}, method: {method.upper()})', fontsize=FONT_SIZE-2)
-
-    plt.tight_layout()
-
-    fname_figure = os.path.join(dir_path, f'figure_spinal_levels_{distance}_distance_{first_level}-{last_level}_ref_{reference}_method_{method}.png')
-    fig.savefig(fname_figure, dpi=300)
-    print(f'Figure saved to {fname_figure}')
-    plt.show()
-
-
-def generate_distance_figure_both_methods(df_distance, dir_path, reference, distance, first_level=FIRST_LEVEL,
-                                          last_level=LAST_LEVEL, height_col='height (cm)'):
-    """
-    Generate a figure with subjects on the x-axis (sorted by height) and the distance between the `first_level` and
-    `last_level` on the y-axis, with both methods (rootlets and PAM50) shown for each subject at the same x-position.
-    Colors encode sex (blue = female, red = male, gray = unknown) and shade encodes method (dark = rootlets,
-    light = PAM50). The two methods of each subject are connected by a thin vertical line. Subjects without height are
-    placed at the end and separated by a vertical dashed line.
-    :param df_distance: concatenated dataframes returned by compute_and_save_distance() for both methods, with added
-    'sex' and `height_col` columns
-    :param dir_path: path to the output folder where the figure will be saved
-    :param reference: reference point for distance computation
-    :param distance: distance to use (midpoints or total C2-C8 distance)
-    :param first_level: first spinal level
-    :param last_level: last spinal level
-    :param height_col: name of the column with subject height
+    :param height_col: name of the column with subject height (cm)
     """
     dist_col = DISTANCE_COL[distance]
-    df_plot = df_distance.copy()
-    # Make sure height is numeric (non-numeric entries such as 'n/a' become NaN)
-    df_plot[height_col] = pd.to_numeric(df_plot[height_col], errors='coerce')
+    dataset_markers = get_dataset_markers(df_distance['dataset'].unique())  # order of -i
+    df_plot = order_subjects(df_distance, height_col)
 
-    # One x-position per subject (shared by both methods): sorted by height, subjects without height at the end
-    df_subjects = (df_plot[['subject', height_col]].drop_duplicates('subject')
-                   .sort_values([height_col, 'subject'], na_position='last').reset_index(drop=True))
-    x_of_subject = {subject: i + 1 for i, subject in enumerate(df_subjects['subject'])}
-    n_subjects = len(df_subjects)
-    n_with_height = int(df_subjects[height_col].notna().sum())
-    df_plot['x'] = df_plot['subject'].map(x_of_subject)
-    df_plot['sex_key'] = df_plot['sex'].where(df_plot['sex'].isin(list(SEX_STYLE)), 'unknown')
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    # Thin vertical line connecting the two methods of each subject
-    df_wide = df_plot.pivot_table(index='x', columns='method', values=dist_col)
-    if set(METHODS).issubset(df_wide.columns):
-        df_wide = df_wide.dropna(subset=METHODS)
-        ax.vlines(df_wide.index, df_wide[METHODS].min(axis=1) / 10, df_wide[METHODS].max(axis=1) / 10,
-                  color='lightgray', linewidth=0.8, zorder=2)
-
-    # Points: color by sex, shade by method (dark = rootlets, light = PAM50)
-    sex_labels = [(sex, style['label']) for sex, style in SEX_STYLE.items()] + [('unknown', 'Sex unknown')]
-    for sex_key, sex_label in sex_labels:
-        marker = SEX_STYLE[sex_key]['marker'] if sex_key in SEX_STYLE else 'x'
-        for method in METHODS:
-            df_sub = df_plot[(df_plot['sex_key'] == sex_key) & (df_plot['method'] == method)]
+    fig, ax = plt.subplots(figsize=(12, 5))
+    for dataset, marker in dataset_markers.items():
+        for sex_key in SEX_ORDER:
+            df_sub = df_plot[(df_plot['dataset'] == dataset) & (df_plot['sex_key'] == sex_key)]
             if df_sub.empty:
                 continue
             ax.scatter(df_sub['x'], df_sub[dist_col] / 10,  # convert mm to cm for plotting
-                       color=METHOD_COLORS[sex_key][method], marker=marker, s=30, zorder=3,
-                       label=f"{sex_label} – {method} (n = {df_sub['subject'].nunique()})", alpha=0.7)
+                       color=SEX_COLOR[sex_key], marker=marker, s=30, zorder=3)
 
-    # Separator between subjects with and without height
-    if 0 < n_with_height < n_subjects:
-        x_sep = n_with_height + 0.5
-        ax.axvline(x_sep, color='black', linestyle='--', linewidth=0.8, alpha=0.6, zorder=2)
-        ax.text(x_sep + 0.3, 13, f'Height unknown (n = {n_subjects - n_with_height})',
-                ha='left', va='top', fontsize=FONT_SIZE - 4, color='dimgray')
+    draw_sex_groups(ax, df_plot)
+    style_axes(ax, len(df_plot), distance, first_level, last_level, y_max=12)
 
-    # Subjects sorted by height as numbered x-axis positions
-    ax.set_xlim(0.5, n_subjects + 2)
-    ax.set_xlabel(f'Subject sorted by height (n = {n_subjects})', fontsize=FONT_SIZE)
-    ax.set_ylim(0, 14)
-
-    ax.set_ylabel(f'{distance.capitalize()} distance C{first_level}–C{last_level} [cm]', fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
-    ax.tick_params(axis='x', labelsize=FONT_SIZE - 2)
-    ax.grid(axis='y', alpha=0.2)
-    ax.set_axisbelow(True)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    ax.legend(loc='lower left', bbox_to_anchor=(0.00, 0.03), ncol=3, frameon=True, fontsize=FONT_SIZE - 5)
-    #ax.set_title(f'{distance.capitalize()} distance between C{first_level} and C{last_level} '
-    #             f'(reference: {reference.upper()}, method: ROOTLETS vs PAM50)', fontsize=FONT_SIZE - 2)
+    color_handles = [Patch(color=SEX_COLOR[sex_key], label=SEX_LABEL[sex_key])
+                     for sex_key in SEX_ORDER if (df_plot['sex_key'] == sex_key).any()]
+    add_legends(ax, color_handles, dataset_markers, df_plot)
 
     plt.tight_layout()
 
     fname_figure = os.path.join(dir_path, f'figure_spinal_levels_{distance}_distance_{first_level}-{last_level}'
-                                          f'_ref_{reference}_method_rootlets-vs-PAM50.png')
+                                          f'_ref_{reference}_method_{method}.png')
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     plt.show()
+
+
+def exclude_and_summarize(df_all, dataset_names):
+    """
+    Exclude subjects with missing height or sex and print, per dataset and in total, how many subjects were excluded
+    (and why) and how many were used (females/males).
+    :param df_all: combined dataframe (one row per subject) with 'dataset', 'subject', 'sex' and HEIGHT_COL columns
+    :param dataset_names: dataset names in the order of -i
+    :return: dataframe with the included subjects only
+    """
+    missing_sex = df_all['sex'].isna()
+    missing_height = df_all[HEIGHT_COL].isna()
+    excluded = missing_sex | missing_height
+    df_used = df_all[~excluded].reset_index(drop=True)
+
+    print('\n=== Subjects summary ===')
+    for dataset in list(dataset_names) + ['TOTAL']:
+        mask = df_all['dataset'] == dataset if dataset != 'TOTAL' else pd.Series(True, index=df_all.index)
+        df_ds_used = df_all[mask & ~excluded]
+        n_f = int((df_ds_used['sex'] == 'F').sum())
+        n_m = int((df_ds_used['sex'] == 'M').sum())
+        print(f'{dataset}: {int(mask.sum())} subjects with results -> {len(df_ds_used)} used '
+              f'({n_f} females, {n_m} males); excluded {int((mask & excluded).sum())} '
+              f'(missing sex: {int((mask & missing_sex).sum())}, missing height: {int((mask & missing_height).sum())})')
+        if dataset != 'TOTAL' and (mask & excluded).any():
+            print(f'    excluded subjects: {df_all.loc[mask & excluded, "subject"].tolist()}')
+    print()
+    return df_used
 
 
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    dir_path = os.path.abspath(args.i)
     reference = args.reference
     distance = args.distance
-    methods = METHODS if args.method == 'both' else [args.method]
-    # Outputs (CSV files and figure) are saved to the output folder
+    method = args.method
     out_dir = os.path.abspath(args.output_folder)
     os.makedirs(out_dir, exist_ok=True)
 
-    # Subject sex and height (used to color and sort the points in the figure)
-    df_participants = pd.read_csv(args.participants, sep='\t')
+    # Pair each results folder with its participants.tsv (and name)
+    input_dirs = [os.path.abspath(path) for path in args.i]
+    participants_files = [os.path.expanduser(path) for path in args.participants]
+    if len(participants_files) != len(input_dirs):
+        parser.error(f'-i has {len(input_dirs)} folder(s) but -participants has {len(participants_files)} file(s); '
+                     f'pass one participants.tsv per dataset, in the same order.')
+    if args.dataset_names is None:
+        dataset_names = [os.path.basename(os.path.dirname(os.path.abspath(path))) for path in participants_files]
+    else:
+        dataset_names = args.dataset_names
+    if len(dataset_names) != len(input_dirs) or len(set(dataset_names)) != len(dataset_names):
+        parser.error('-dataset-names must give one unique name per dataset (same order as -i).')
 
-    # Compute the distance between the C2 and C8 levels (one value per subject) for each method
+    # Compute the distance between the C2 and C8 levels (one value per subject) for each dataset
     list_df_distance = []
-    for method in methods:
-        df = load_spinal_levels(dir_path, reference, method, out_dir)
-        df_distance = compute_and_save_distance(df, reference, method, distance, out_dir)
-        df_distance = df_distance.merge(df_participants[['participant_id', 'sex', 'height (cm)']], how='left',
-                                        left_on='subject', right_on='participant_id')
+    for dir_path, fname_participants, dataset in zip(input_dirs, participants_files, dataset_names):
+        print(f'\n=== Dataset: {dataset} ({dir_path}) ===')
+        df_participants = load_participants(fname_participants)
+        df = load_spinal_levels(dir_path, reference, method, out_dir, dataset)
+        df_distance = compute_and_save_distance(df, reference, method, distance, out_dir, dataset)
+        df_distance = df_distance.merge(df_participants, how='left', left_on='subject', right_on='participant_id')
+        not_found = df_distance.loc[df_distance['participant_id'].isna(), 'subject'].tolist()
+        if not_found:
+            print(f'WARNING: {len(not_found)} subject(s) of {dataset} not found in {fname_participants}: '
+                  f'{not_found}')
         list_df_distance.append(df_distance)
 
-    # Plot the distance between the C2 and C8 levels per subject
-    if len(methods) == 1:
-        generate_distance_figure(list_df_distance[0], out_dir, reference, methods[0], distance,
-                                 FIRST_LEVEL, LAST_LEVEL)
-    else:
-        generate_distance_figure_both_methods(pd.concat(list_df_distance, ignore_index=True), out_dir, reference,
-                                              distance, FIRST_LEVEL, LAST_LEVEL)
+    # Combine all datasets
+    df_all = pd.concat(list_df_distance, ignore_index=True)
+    df_all['subject_key'] = df_all['dataset'] + '/' + df_all['subject']
+
+    # Exclude subjects with missing height or sex and print a summary
+    df_all = exclude_and_summarize(df_all, dataset_names)
+    fname_combined = os.path.join(out_dir, f'spinal_levels_{distance}_distance_{FIRST_LEVEL}-{LAST_LEVEL}'
+                                           f'_ref_{reference}_method_{method}_all_datasets.csv')
+    df_all.to_csv(fname_combined, index=False)
+    print(f'\nCombined CSV ({len(dataset_names)} dataset(s): {", ".join(dataset_names)}) saved in {fname_combined}.')
+
+    # Plot the distance between the C2 and C8 levels per subject (all datasets in one figure)
+    generate_distance_figure(df_all, out_dir, reference, method, distance, FIRST_LEVEL, LAST_LEVEL)
 
 
 if __name__ == '__main__':
