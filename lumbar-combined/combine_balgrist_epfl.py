@@ -187,6 +187,33 @@ def generate_correlation_figure(df, dir_out):
     print(f'Figure saved to {fname_figure}')
 
 
+def print_summary(df):
+    """
+    Print a short overview of the L1-L5 length (mean ± SD [range]) to copy into an abstract.
+    """
+    def describe(values, unit='mm'):
+        return f'{values.mean():.1f} ± {values.std():.1f} {unit} [{values.min():.1f}–{values.max():.1f}]'
+
+    n_female, n_male = (df['sex'] == 'F').sum(), (df['sex'] == 'M').sum()
+    female, male = df.loc[df['sex'] == 'F', 'length_mm'], df.loc[df['sex'] == 'M', 'length_mm']
+    p_sex = stats.mannwhitneyu(female, male).pvalue
+    rho, p = stats.spearmanr(df['height'], df['length_mm'])
+    rho_lo, rho_hi = spearman_ci(rho, len(df))
+
+    print('\n===== Summary: length top L1 – bottom L5 along the centerline (mean ± SD [range]) =====')
+    print(f"All:      n = {len(df)} ({n_female} F / {n_male} M), {describe(df['length_mm'])}")
+    for dataset in DATASET_MARKER:
+        subset = df[df['dataset'] == dataset]
+        print(f"{dataset + ':':<9} n = {len(subset)}, {describe(subset['length_mm'])}")
+    print(f'Female:   n = {n_female}, {describe(female)}')
+    print(f'Male:     n = {n_male}, {describe(male)}')
+    print(f'Female vs. male: Mann-Whitney U p = {p_sex:.3f}')
+    print(f"Height:   {describe(df['height'], unit='cm')}")
+    print(f'Length vs. height: Spearman ρ = {rho:.2f} [95% CI {rho_lo:.2f}, {rho_hi:.2f}], p = {p:.3f}')
+    print('=' * 88)
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='Combine the lumbar L1-L5 length of the Balgrist and EPFL datasets '
                                                  'into a per-subject figure and a correlation with height.')
@@ -215,6 +242,7 @@ def main():
 
     generate_length_figure(df, dir_out)
     generate_correlation_figure(df, dir_out)
+    print_summary(df)
     plt.show()
 
 
