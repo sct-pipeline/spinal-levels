@@ -212,6 +212,16 @@ def print_summary(df):
     print(f'Length vs. height: Spearman ρ = {rho:.2f} [95% CI {rho_lo:.2f}, {rho_hi:.2f}], p = {p:.3f}')
     print('=' * 88)
 
+    # The same in a single sentence; the wording depends on the significance (p < 0.05)
+    n_dataset = ', '.join(f"{dataset} n = {(df['dataset'] == dataset).sum()}" for dataset in DATASET_MARKER)
+    sex_result = 'a significant' if p_sex < 0.05 else 'no significant'
+    height_result = 'a significant' if p < 0.05 else 'no significant'
+    print(f"\nIn {len(df)} participants ({n_female} F / {n_male} M; {n_dataset}), the spinal cord length from the top "
+          f"of L1 to the bottom of L5 measured along the centerline was {df['length_mm'].mean():.1f} ± "
+          f"{df['length_mm'].std():.1f} mm (range {df['length_mm'].min():.1f}–{df['length_mm'].max():.1f} mm), "
+          f"with {sex_result} difference between females and males ({female.mean():.1f} ± {female.std():.1f} vs. "
+          f"{male.mean():.1f} ± {male.std():.1f} mm, p = {p_sex:.3f}) and {height_result} correlation with body "
+          f"height (Spearman ρ = {rho:.2f}, p = {p:.3f}).")
 
 
 def main():
