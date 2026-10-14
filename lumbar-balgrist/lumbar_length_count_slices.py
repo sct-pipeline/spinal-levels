@@ -17,8 +17,8 @@ spinal level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5, 6=S1, 7=S2.
 
 Output (saved to the -o folder, default: ~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures;
 <metric> is length_L1-L5 or midpoints_distance_L1-S1):
-    - lumbar_<metric>.csv: length for each subject, and the min slice, max slice and midpoint slice of each spinal
-      level
+    - lumbar_<metric>.csv: length for each subject, the min slice, max slice and midpoint slice of each spinal
+      level, and the subject sex and height
     - figure_lumbar_<metric>.png: the same length plotted per subject
 
 The script requires the SCT conda environment to be activated:
@@ -117,13 +117,13 @@ def main():
         raise FileNotFoundError(f'No *_spinallevels_dseg.nii.gz files found in {dir_path}. Check the -i path.')
     df = pd.DataFrame(rows)
 
-    # Save the lengths to a CSV file
+    # Add the subject sex and height (also used to color and sort the subjects in the figure)
+    df = add_sex_height(df, args.xlsx)
+
+    # Save the lengths, with sex and height, to a CSV file
     fname_csv = os.path.join(dir_out, f"lumbar_{metric['name']}.csv")
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
-
-    # Add the subject sex and height (used only to color and sort the subjects in the figure)
-    df = add_sex_height(df, args.xlsx)
 
     # Plot the length per subject
     generate_figure(df, dir_out, metric)

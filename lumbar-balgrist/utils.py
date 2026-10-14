@@ -47,7 +47,7 @@ def add_sex_height(df, fname_xlsx):
     df_xlsx['sex'] = df_xlsx['sex'].str.upper()   # 'f'/'m' -> 'F'/'M'
     df_xlsx = df_xlsx.rename(columns={'Height (cm)': 'height'})
     return df.merge(df_xlsx[['Participants', 'sex', 'height']], how='left', left_on='subject',
-                    right_on='Participants')
+                    right_on='Participants').drop(columns='Participants')
 
 
 def spearman_ci(rho, n, alpha=0.05):
