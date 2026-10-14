@@ -143,11 +143,9 @@ def main():
     dir_path = os.path.abspath(args.i)
     param_centerline = ParamCenterline(algo_fitting=args.centerline_algo, smooth=args.centerline_smooth, minmax=True)
 
-    # Same outputs as the straight version, with '_centerline' in the file and column names and '(centerline)' in the
-    # axis label
+    # Same outputs as the straight version, with '_centerline' in the file and column names
     metric = dict(METRICS[args.metric])
     metric['name'] = f"{metric['name']}_centerline"
-    metric['label'] = f"{metric['label']} (centerline)"
 
     # Compute the length for each subject
     rows = []

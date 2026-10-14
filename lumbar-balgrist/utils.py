@@ -84,7 +84,7 @@ def generate_figure(df, dir_path, metric):
     # Sort the subjects by height (from the shortest to the tallest); subjects without height at the end
     df_plot = df.sort_values('height', na_position='last').reset_index(drop=True)
 
-    fig, ax = plt.subplots(figsize=(max(6, len(df_plot) * 0.6), 7))   # taller for the rotated subject + height labels
+    fig, ax = plt.subplots(figsize=(max(6, len(df_plot) * 0.6), 5))
     # Points colored by sex; subjects without sex information in gray
     x = np.arange(1, len(df_plot) + 1)
     y = (df_plot[f"{metric['name']}_mm"]).to_numpy() / 10  # convert mm to cm for plotting
@@ -97,10 +97,9 @@ def generate_figure(df, dir_path, metric):
         ax.scatter(x[mask], y[mask], color='gray', marker='x', s=50, zorder=3,
                    label=f'Sex unknown (n = {mask.sum()})')
 
-    # Subject names and heights as x-axis labels
+    # Subject names as x-axis labels
     ax.set_xticks(x)
-    ax.set_xticklabels([f'{subject} ({height:.0f} cm)' if pd.notna(height) else subject
-                        for subject, height in zip(df_plot['subject'], df_plot['height'])], rotation=45, ha='right')
+    ax.set_xticklabels(df_plot['subject'], rotation=45, ha='right')
     ax.set_xlim(0.5, len(df_plot) + 0.5)
     ax.set_xlabel('Subjects sorted by height', fontsize=FONT_SIZE)
     ax.set_ylim(0, 12)
