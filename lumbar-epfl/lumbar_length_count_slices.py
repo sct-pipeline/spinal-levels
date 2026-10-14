@@ -32,8 +32,8 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Example:
-    python lumbar_length_count_slices.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
-    python lumbar_length_count_slices.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
+    python lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks
+    python lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
 
 Author: Jan Valosek
 """
@@ -106,7 +106,7 @@ def main():
     args = parser.parse_args()
     dir_path = os.path.abspath(os.path.expanduser(args.i))
     fname_participants = args.participants or os.path.join(os.path.dirname(dir_path), 'participants.tsv')
-    metric = METRICS[args.metric]
+    metric = f'{METRICS[args.metric]}_slice_count'
 
     # Compute the length for each subject
     df = compute_length(dir_path, metric)
