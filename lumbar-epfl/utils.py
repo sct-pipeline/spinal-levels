@@ -7,6 +7,7 @@ Author: Jan Valosek
 
 import os
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
@@ -67,8 +68,10 @@ def style_axes(ax):
 
 def generate_length_figure(df, metric):
     """
-    Figure with subjects on the x-axis and the length on the y-axis, colored by sex.
+    Figure with subjects on the x-axis (sorted by height) and the length on the y-axis, colored by sex.
     """
+    # Sort the subjects by height (from the shortest to the tallest); subjects without height at the end
+    df = df.sort_values('height', na_position='last').reset_index(drop=True)
     x = np.arange(1, len(df) + 1)
     y = df[f"{metric['name']}_mm"].to_numpy() / 10  # convert mm to cm for plotting
 
@@ -78,10 +81,13 @@ def generate_length_figure(df, metric):
         ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=50, zorder=3,
                    label=f"{style['label']} (n = {mask.sum()})")
 
-    # Subject names as x-axis labels
+    # Subject names and heights as x-axis labels
     ax.set_xticks(x)
     ax.set_xticklabels(df['subject'], rotation=45, ha='right')
+    # ax.set_xticklabels([f'{subject} ({height:.0f} cm)' if pd.notna(height) else subject
+    #                     for subject, height in zip(df['subject'], df['height'])], rotation=45, ha='right')
     ax.set_xlim(0.5, len(df) + 0.5)
+    ax.set_xlabel('Subjects sorted by height', fontsize=FONT_SIZE)
     ax.set_ylim(0, 12)
     ax.set_ylabel(f"{metric['label']} [cm]", fontsize=FONT_SIZE)
     ax.grid(axis='y', alpha=0.2)
