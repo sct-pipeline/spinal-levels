@@ -26,9 +26,9 @@ Input:
 - participants.tsv with the subject sex and height (default: participants.tsv one level above the input folder)
 
 Output (saved to the current working directory; <metric> is e.g. length_L1-L5 or midpoints_distance_L1-S1):
-    - lumbar_<metric>_centerline_masks.csv: length along the centerline per subject, with sex and height
-    - figure_lumbar_<metric>_centerline_masks.png: length per subject, colored by sex
-    - figure_correlation_lumbar_<metric>_centerline_masks_height.png: length vs. height with a linear fit (visual
+    - lumbar_<metric>_along_centerline.csv: length along the centerline per subject, with sex and height
+    - figure_lumbar_<metric>_along_centerline_masks.png: length per subject, colored by sex
+    - figure_correlation_lumbar_<metric>_along_centerline_masks_height.png: length vs. height with a linear fit (visual
       guide), its 95% confidence band, and the Spearman correlation coefficient with its 95% CI
     - centerline/<subject>_<session>_label-SC_centerline.nii.gz: fitted centerline for visual QC, e.g.:
         ff <T2w> centerline/<subject>_<session>_label-SC_centerline.nii.gz
@@ -38,8 +38,8 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Example:
-    python lumbar_length_along_centerline.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks
-    python lumbar_length_along_centerline.py -i ~/data/balgrist/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
+    python lumbar_length_along_centerline.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks
+    python lumbar_length_along_centerline.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
 
 Author: Jan Valosek
 """
@@ -56,8 +56,8 @@ from spinalcordtoolbox.image import Image
 from spinalcordtoolbox.centerline.core import ParamCenterline, get_centerline
 from spinalcordtoolbox.types import Centerline
 
-# Metric definitions and plotting shared with the straight (slice-count) version of this script
-from lumbar_length_count_slices import METRICS, generate_length_figure, generate_correlation_figure
+# Metric definitions, statistics and plotting shared by the lumbar length scripts
+from utils import METRICS, generate_length_figure, generate_correlation_figure
 
 
 def get_level_slice(fname, point):
@@ -100,7 +100,7 @@ def compute_length(dir_path, metric, param_centerline):
     :param dir_path: folder with the spinal level masks (one level per file) and the whole spinal cord mask
     :param metric: dict from METRICS
     :param param_centerline: ParamCenterline
-    :return: dataframe with 'subject' and '<metric name>_centerline_mm' columns
+    :return: dataframe with 'subject' and '<metric name>_along_centerline_mm' columns
     """
     first, last = metric['first'], metric['last']
     dir_qc = os.path.join(os.getcwd(), 'centerline')
@@ -125,7 +125,7 @@ def compute_length(dir_path, metric, param_centerline):
         z_last = get_level_slice(fname_last, metric['point_last'])
         length = float(length_at_slice(z_first) - length_at_slice(z_last))
         print(f"{subject}: {metric['label']} = {length:.1f} mm along the centerline")
-        rows.append({'subject': subject, f"{metric['name']}_centerline_mm": length})
+        rows.append({'subject': subject, f"{metric['name']}_along_centerline_mm": length})
     if not rows:
         raise FileNotFoundError(f'No *_desc-{first}_mask.nii.gz files found in {dir_path}. Check the -i path.')
     print(f'Centerlines saved to {dir_qc}')
@@ -160,8 +160,8 @@ def main():
     # Plot the length along the centerline: same figures as the straight version, with '_centerline' in the
     # file names and '(centerline)' in the axis labels
     metric = dict(METRICS[args.metric])
-    metric['name'] = f"{metric['name']}_centerline"
-    metric['label'] = f"{metric['label']} (centerline)"
+    metric['name'] = f"{metric['name']}_along_centerline"
+    metric['label'] = f"{metric['label']}"
 
     # Add the subject sex and height
     df_participants = pd.read_csv(fname_participants, sep='\t')
@@ -170,7 +170,7 @@ def main():
     df['sex'] = df['sex'].str.upper()
 
     # Save the lengths to a CSV file
-    fname_csv = os.path.join(os.getcwd(), f"lumbar_{metric['name']}_masks.csv")
+    fname_csv = os.path.join(os.getcwd(), f"lumbar_{metric['name']}.csv")
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
