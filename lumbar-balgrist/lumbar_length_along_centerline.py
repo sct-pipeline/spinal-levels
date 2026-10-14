@@ -52,8 +52,8 @@ from spinalcordtoolbox.image import Image
 from spinalcordtoolbox.centerline.core import ParamCenterline, get_centerline
 from spinalcordtoolbox.types import Centerline
 
-# Metric definitions, Excel file with the subject sex, and plotting shared with the straight (slice-count) version
-from lumbar_length_count_slices import METRICS, PARTICIPANTS_XLSX, PARTICIPANTS_SHEET, generate_figure
+# Metric definitions, Excel file with the subject sex and height, and plotting shared by the lumbar length scripts
+from utils import METRICS, PARTICIPANTS_XLSX, add_sex_height, generate_figure
 
 
 def get_level_slice(data, value, point):
@@ -137,7 +137,7 @@ def main():
                         help='Degree of smoothing for centerline fitting, only for bspline and linear (as in '
                              'sct_process_segmentation). Default: 30.')
     parser.add_argument('-xlsx', default=PARTICIPANTS_XLSX,
-                        help=f'Excel file with the subject sex (used to color the points). '
+                        help=f'Excel file with the subject sex and height (used to color and sort the points). '
                              f'Default: {PARTICIPANTS_XLSX}')
     args = parser.parse_args()
     dir_path = os.path.abspath(args.i)
@@ -156,6 +156,8 @@ def main():
         print(subject)
         rows.append({'subject': subject,
                      f"{metric['name']}_mm": compute_length(fname, args.metric, param_centerline)})
+    if not rows:
+        raise FileNotFoundError(f'No *_spinallevels_dseg.nii.gz files found in {dir_path}. Check the -i path.')
     df = pd.DataFrame(rows)
 
     # Save the lengths to a CSV file
@@ -163,11 +165,8 @@ def main():
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
-    # Add the subject sex (used only to color the points in the figure)
-    df_sex = pd.read_excel(args.xlsx, sheet_name=PARTICIPANTS_SHEET)
-    df_sex = df_sex[df_sex['Participants'].astype(str).str.startswith('sub-')]
-    df_sex['sex'] = df_sex['sex'].str.upper()   # 'f'/'m' -> 'F'/'M'
-    df = df.merge(df_sex[['Participants', 'sex']], how='left', left_on='subject', right_on='Participants')
+    # Add the subject sex and height (used only to color and sort the subjects in the figure)
+    df = add_sex_height(df, args.xlsx)
 
     # Plot the length per subject
     generate_figure(df, dir_path, metric)

@@ -36,28 +36,11 @@ import glob
 import argparse
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from spinalcordtoolbox.image import Image
 
-LEVELS = {1: 'L1', 2: 'L2', 3: 'L3', 4: 'L4', 5: 'L5', 6: 'S1', 7: 'S2'}
-
-# Metrics: first and last spinal level (values in the segmentation), and names for the outputs and figures
-METRICS = {
-    'top-bottom': {'first': 1, 'last': 5, 'name': 'length_L1-L5', 'label': 'Length top L1 – bottom L5'},
-    'midpoints': {'first': 1, 'last': 6, 'name': 'midpoints_distance_L1-S1', 'label': 'Distance L1–S1 midpoints'},
-}
-
-FONT_SIZE = 14
-
-# Excel file with the subject sex ('sex' column in the 'Spinal level heights (mm)' sheet)
-PARTICIPANTS_XLSX = os.path.expanduser('~/results/lumbar_rootlets_Balgrist/spinal_level_segmentation_L1-S2/'
-                                       'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
-PARTICIPANTS_SHEET = 'Spinal level heights (mm)'
-
-# Female and male colors and markers
-SEX_STYLE = {'F': {'color': '#2a78d6', 'marker': 'o', 'label': 'Female'},
-             'M': {'color': '#eb6834', 'marker': 's', 'label': 'Male'}}
+# Metric definitions, Excel file with the subject sex and height, and plotting shared by the lumbar length scripts
+from utils import LEVELS, METRICS, PARTICIPANTS_XLSX, add_sex_height, generate_figure
 
 
 def compute_length(fname, metric_name):
@@ -103,54 +86,6 @@ def compute_length(fname, metric_name):
     return row
 
 
-def generate_figure(df, dir_path, metric):
-    """
-    Generate a figure with subjects on the x-axis and the length on the y-axis.
-    :param df: dataframe with 'subject' and '<metric name>_mm' columns
-    :param dir_path: path to the output folder where the figure will be saved
-    :param metric: dict from METRICS
-    The dataframe must also contain a 'sex' column ('F'/'M') used to color the points.
-    """
-    df_plot = df
-
-    fig, ax = plt.subplots(figsize=(max(6, len(df_plot) * 0.6), 5))
-    # Points colored by sex; subjects without sex information in gray
-    x = np.arange(1, len(df_plot) + 1)
-    y = (df_plot[f"{metric['name']}_mm"]).to_numpy() / 10  # convert mm to cm for plotting
-    for sex, style in SEX_STYLE.items():
-        mask = (df_plot['sex'] == sex).to_numpy()
-        ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=50, zorder=3,
-                   label=f"{style['label']} (n = {mask.sum()})")
-    mask = (~df_plot['sex'].isin(list(SEX_STYLE))).to_numpy()
-    if mask.any():
-        ax.scatter(x[mask], y[mask], color='gray', marker='x', s=50, zorder=3,
-                   label=f'Sex unknown (n = {mask.sum()})')
-
-    # Subject names as x-axis labels
-    ax.set_xticks(x)
-    ax.set_xticklabels(df['subject'], rotation=45, ha='right')
-    ax.set_xlim(0.5, len(df) + 0.5)
-    ax.set_ylim(0, 12)
-
-    ax.set_ylabel(f"{metric['label']} [cm]", fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
-    ax.tick_params(axis='x', labelsize=FONT_SIZE - 2)
-    ax.grid(axis='y', alpha=0.2)
-    ax.set_axisbelow(True)
-    ax.spines['right'].set_visible(False)
-    ax.spines['top'].set_visible(False)
-    # Legend above the plot so it does not overlap the points
-    ax.legend(loc='lower right', bbox_to_anchor=(1, 1), ncol=3, frameon=False, fontsize=FONT_SIZE - 4,
-              handletextpad=0.3, columnspacing=1)
-
-    plt.tight_layout()
-
-    fname_figure = os.path.join(dir_path, f"figure_lumbar_{metric['name']}.png")
-    fig.savefig(fname_figure, dpi=300)
-    print(f'Figure saved to {fname_figure}')
-    plt.show()
-
-
 def main():
     parser = argparse.ArgumentParser(description='Compute a lumbar spinal cord length from labeled spinal cord '
                                                  'segmentations by counting axial slices.')
@@ -160,7 +95,7 @@ def main():
                         help='top-bottom: length from the top of L1 to the bottom of L5; midpoints: distance between '
                              'the L1 and S1 midpoints. Default: top-bottom.')
     parser.add_argument('-xlsx', default=PARTICIPANTS_XLSX,
-                        help=f'Excel file with the subject sex (used to color the points). '
+                        help=f'Excel file with the subject sex and height (used to color and sort the points). '
                              f'Default: {PARTICIPANTS_XLSX}')
     args = parser.parse_args()
     dir_path = os.path.abspath(args.i)
@@ -172,6 +107,8 @@ def main():
         subject = os.path.basename(fname).split('_')[0]
         print(subject)
         rows.append({'subject': subject, **compute_length(fname, args.metric)})
+    if not rows:
+        raise FileNotFoundError(f'No *_spinallevels_dseg.nii.gz files found in {dir_path}. Check the -i path.')
     df = pd.DataFrame(rows)
 
     # Save the lengths to a CSV file
@@ -179,11 +116,8 @@ def main():
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
-    # Add the subject sex (used only to color the points in the figure)
-    df_sex = pd.read_excel(args.xlsx, sheet_name=PARTICIPANTS_SHEET)
-    df_sex = df_sex[df_sex['Participants'].astype(str).str.startswith('sub-')]
-    df_sex['sex'] = df_sex['sex'].str.upper()   # 'f'/'m' -> 'F'/'M'
-    df = df.merge(df_sex[['Participants', 'sex']], how='left', left_on='subject', right_on='Participants')
+    # Add the subject sex and height (used only to color and sort the subjects in the figure)
+    df = add_sex_height(df, args.xlsx)
 
     # Plot the length per subject
     generate_figure(df, dir_path, metric)
