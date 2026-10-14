@@ -135,13 +135,12 @@ def main():
         z = centerline[:, 2]
         extrap = max(0.0, z_top - z.max()) + max(0.0, z.min() - z_bottom)
 
-        print(f'  Cord length = {length:.1f} mm (straight S-I distance {z_top - z_bottom:.1f} mm)')
+        print(f'  Cord length = {length:.1f} mm')
         if extrap > 3:
             print(f'  WARNING: centerline extended by {extrap:.0f} mm beyond its traced range.')
         rows.append({'participant_id': name.split('_')[0],
                      'session_id': name.split('_')[1],
-                     'cord_length_mm': length,
-                     'si_distance_mm': z_top - z_bottom,
+                     'cord_length_along_centerline_mm': length,
                      'centerline_extrap_mm': extrap})
 
     fname_out = args.o or os.path.join(args.i, 'cord_length.csv')
