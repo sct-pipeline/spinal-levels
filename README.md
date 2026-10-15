@@ -99,14 +99,14 @@ Outputs (in the current working directory): `lumbar_<metric>_masks.csv`, `figure
 
 ## Lumbar Balgrist + EPFL + Fudan combined
 
-[`lumbar-combined/combine_balgrist_epfl.py`](lumbar-combined/combine_balgrist_epfl.py) combines the L1–L5 length along
+[`lumbar-combined/combine_lumbar_lengths.py`](lumbar-combined/combine_lumbar_lengths.py) combines the L1–L5 length along
 the centerline of the Balgrist and EPFL datasets (CSV files from the two `lumbar_length_along_centerline.py` scripts)
 and the Fudan dataset (`~/data/spinal-levels/lumbar_fudan/L1-L5_lengths.xlsx`) into a per-subject
 figure (stratified by sex, sorted by height) and a correlation with height (all subjects pooled). Sex is shown by color
 and the dataset by marker.
 
 ```bash
-python lumbar-combined/combine_balgrist_epfl.py
+python lumbar-combined/combine_lumbar_lengths.py
 ```
 
 Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/figures_lumbar_combined`):

@@ -21,7 +21,7 @@ Output (saved to the -o folder):
     - figure_correlation_lumbar_length_L1-L5_balgrist_epfl_fudan_height.png: length vs. height
 
 Example:
-    python combine_balgrist_epfl.py
+    python combine_lumbar_lengths.py
 
 Author: Jan Valosek
 """
