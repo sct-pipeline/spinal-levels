@@ -9,7 +9,8 @@ Input:
 
 Output (saved to the same folder as the input CSV):
     - cord_length_vs_spinal_levels.csv: cord length, L1-S2 and L1-L5 lengths, body height, weight, sex and BMI per subject
-    - cord_length_comparison.png: cord length vs body height, L1-S2 lengths and L1-L5 lengths, with the Pearson correlation
+    - cord_length_comparison.png: cord length vs body height, cervical length (placeholder until the data are
+      available) and L1-L5 length, with the Spearman correlation and a linear fit with its 95% confidence band
 
 Example:
     python 03_correlation_cord_length.py -i cord_length.csv -xlsx spinal_level_heights_top_L1-bottom_S2.xlsx
@@ -25,6 +26,17 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'S1', 'S2']
+FONT_SIZE = 14
+
+# Female and male colors and markers (same as in ../06_correlation_lumbar_length_height.py)
+SEX_STYLE = {'f': {'color': '#2a78d6', 'marker': 'o', 'label': 'Female'},
+             'm': {'color': '#eb6834', 'marker': 's', 'label': 'Male'}}
+
+# Figure panels: (column, x-axis label, divisor to convert the column to the plotted unit)
+# The cervical length is not available yet; its panel is drawn as a placeholder until the column exists
+PANELS = [('body_height_cm', 'Height [cm]', 1),
+          ('cervical_length_mm', 'Cervical length [cm]', 10),
+          ('L1_L5_span_mm', 'Lumbar length (L1 to L5) [cm]', 10)]
 
 
 def load_excel(fname):
@@ -52,6 +64,56 @@ def load_excel(fname):
     return demographics.merge(spans, on='participant_id', how='left')
 
 
+def spearman_ci(rho, n, alpha=0.05):
+    """
+    Confidence interval of the Spearman correlation coefficient using the Fisher z-transformation with the
+    Bonett & Wright (2000) standard error, sqrt(1.06 / (n - 3)).
+    """
+    z = np.arctanh(rho)
+    se = np.sqrt(1.06 / (n - 3))
+    z_crit = stats.norm.ppf(1 - alpha / 2)
+    return np.tanh(z - z_crit * se), np.tanh(z + z_crit * se)
+
+
+def linear_fit_ci_band(x, y, x_fit, alpha=0.05):
+    """
+    Linear fit and the confidence band of the fitted mean (ordinary least squares).
+    :return: y_fit, lower bound, upper bound evaluated at x_fit
+    """
+    n = len(x)
+    slope, intercept = np.polyfit(x, y, 1)
+    y_fit = slope * x_fit + intercept
+    residuals = y - (slope * x + intercept)
+    s = np.sqrt(np.sum(residuals ** 2) / (n - 2))   # residual standard error
+    se_fit = s * np.sqrt(1 / n + (x_fit - x.mean()) ** 2 / np.sum((x - x.mean()) ** 2))
+    t_crit = stats.t.ppf(1 - alpha / 2, n - 2)
+    return y_fit, y_fit - t_crit * se_fit, y_fit + t_crit * se_fit
+
+
+def format_axis(ax, xlabel):
+    """
+    Axis labels, grid and spines shared by all panels.
+    """
+    ax.set_xlabel(xlabel, fontsize=FONT_SIZE)
+    ax.set_ylabel('Cord length PMJ to conus [mm]', fontsize=FONT_SIZE)
+    ax.tick_params(axis='both', labelsize=FONT_SIZE - 2)
+    ax.grid(alpha=0.2)
+    ax.set_axisbelow(True)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+
+def plot_placeholder(ax, xlabel):
+    """
+    Empty panel for a variable whose data are not available yet.
+    """
+    ax.text(0.5, 0.5, 'Data pending', transform=ax.transAxes, ha='center', va='center', fontsize=FONT_SIZE,
+            color='gray')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    format_axis(ax, xlabel)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Compare the spinal cord length with body height and lumbosacral '
                                                  'spinal level lengths.')
@@ -61,7 +123,8 @@ def main():
     args = parser.parse_args()
     path_out = os.path.dirname(os.path.abspath(args.i))
 
-    df = pd.read_csv(args.i)[['participant_id', 'cord_length_mm']]
+    df = pd.read_csv(args.i).rename(columns={'cord_length_along_centerline_mm': 'cord_length_mm'})
+    df = df[['participant_id', 'cord_length_mm']]
     df = df.merge(load_excel(args.xlsx), on='participant_id', how='left').sort_values('participant_id')
     df = df[['participant_id', 'cord_length_mm', 'L1_S2_span_mm', 'L1_L5_span_mm', 'body_height_cm', 'weight_kg',
              'sex', 'bmi']]
@@ -77,29 +140,44 @@ def main():
         print(f'  {sex}: {group["cord_length_mm"].mean():.1f} ± {group["cord_length_mm"].std():.1f} mm '
               f'(n={len(group)})')
 
-    # Correlations and figure
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.6))
-    for ax, (col, label) in zip(axes, [('body_height_cm', 'Body height (cm)'),
-                                       ('L1_S2_span_mm', 'L1–S2 span (mm)'),
-                                       ('L1_L5_span_mm', 'L1–L5 span (mm)')]):
-        data = df[[col, 'cord_length_mm']].dropna()
-        x, y = data[col], data['cord_length_mm']
-        r, p = stats.pearsonr(x, y)
-        print(f'Cord length vs {col}: r={r:+.2f}, p={p:.3f}, n={len(data)}')
+    # Correlations and figure: cord length vs body height, cervical length and lumbar length
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    for ax, (col, xlabel, scale) in zip(axes, PANELS):
+        if col not in df.columns:
+            plot_placeholder(ax, xlabel)
+            continue
+        data = df[[col, 'cord_length_mm', 'sex']].dropna(subset=[col, 'cord_length_mm'])
+        x, y = data[col].astype(float) / scale, data['cord_length_mm'].astype(float)
+        rho, p = stats.spearmanr(x, y)
+        rho_lo, rho_hi = spearman_ci(rho, len(data))
+        print(f'Cord length vs {col}: Spearman rho={rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], p={p:.3f}, '
+              f'n={len(data)}')
 
-        ax.scatter(x, y, s=42, color='#2c7fb8', edgecolor='white', zorder=3)
-        slope, intercept = np.polyfit(x, y, 1)
-        x_fit = np.linspace(x.min(), x.max(), 50)
-        ax.plot(x_fit, intercept + slope * x_fit, color='#d95f02', lw=1.8)
-        ax.set_xlabel(label)
-        ax.set_ylabel('Cord length PMJ→conus (mm)')
-        ax.set_title(f'vs {label.split(" (")[0]}\nr={r:+.2f}{"*" if p < 0.05 else ""} (p={p:.3f}), n={len(data)}',
-                     fontsize=9)
-        ax.grid(alpha=0.25)
-    plt.suptitle(f'Cord length (PMJ→conus), n={len(df)} participants', fontsize=11, y=1.03)
-    plt.tight_layout()
+        # Linear fit across all subjects (only as a visual guide) with its 95% confidence band
+        x_fit = np.linspace(x.min(), x.max(), 100)
+        y_fit, y_lo, y_hi = linear_fit_ci_band(x.to_numpy(), y.to_numpy(), x_fit)
+        ax.fill_between(x_fit, y_lo, y_hi, color='gray', alpha=0.2, linewidth=0, zorder=1,
+                        label='Linear fit, 95% CI')
+        ax.plot(x_fit, y_fit, color='black', linewidth=2, zorder=2)
+        # Scatter plot, colored by sex
+        for sex, style in SEX_STYLE.items():
+            mask = data['sex'] == sex
+            ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=50, edgecolor='white',
+                       zorder=3, label=style['label'])
+
+        n_f, n_m = (data['sex'] == 'f').sum(), (data['sex'] == 'm').sum()
+        ax.set_title(f'Spearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], p = {p:.3f}\n'
+                     f'n = {len(data)} (F {n_f}, M {n_m})', fontsize=FONT_SIZE - 3)
+        format_axis(ax, xlabel)
+
+    # Shared legend below the panels (taken from the first panel with data)
+    handles, labels = next(a for a in axes if a.get_legend_handles_labels()[0]).get_legend_handles_labels()
+    order = [labels.index(lab) for lab in ['Female', 'Male', 'Linear fit, 95% CI']]
+    fig.legend([handles[i] for i in order], [labels[i] for i in order], loc='lower center', ncol=3,
+               frameon=False, fontsize=FONT_SIZE - 2, bbox_to_anchor=(0.5, -0.02))
+    plt.tight_layout(rect=(0, 0.06, 1, 1), w_pad=3)
     fname_png = os.path.join(path_out, 'cord_length_comparison.png')
-    plt.savefig(fname_png, dpi=140, bbox_inches='tight')
+    plt.savefig(fname_png, dpi=300)
     print(f'Saved {fname_png}')
 
 
