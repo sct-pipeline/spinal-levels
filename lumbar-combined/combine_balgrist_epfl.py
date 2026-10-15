@@ -112,7 +112,7 @@ def generate_length_figure(df, dir_out):
     x = np.arange(1, len(df) + 1)
     y = df['length_mm'].to_numpy() / 10  # convert mm to cm
 
-    fig, ax = plt.subplots(figsize=(max(6, len(df) * 0.45), 5))
+    fig, ax = plt.subplots(figsize=(max(6, len(df) * 0.35), 5))
     scatter_by_sex_and_dataset(ax, df, x, y)
 
     # Vertical line between females and males, with the group names
