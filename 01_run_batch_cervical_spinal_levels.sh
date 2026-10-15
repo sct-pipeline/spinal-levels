@@ -10,8 +10,12 @@
 #  - using the chosen METHOD:
 #     rootlets      : intersection of the rootlets segmentation with the spinal cord segmentation (dilated by 3 voxels)
 #     PAM50         : PAM50 spinal levels warped to the subject space (registration using the rootlets)
+# - computing the distance along the spinal cord centerline from the PMJ to the last (most inferior) axial slice of
+#   the spinal cord segmentation -- only when the PMJ reference is requested
 # The output are CSV files with the spinal levels and distances from the chosen reference with columns: spinal_level,
 # fname, slice_start, slice_end, distance_from_REF_start, distance_from_REF_end, distance_from_REF_midpoint, height
+# and (REF=pmj only) CSV files with the PMJ -> last SC seg slice distance with columns: fname_seg, fname_pmj,
+# slice_pmj_I-S, slice_seg_last_I-S, distance_pmj_to_seg_last_mm
 #
 # Expected file naming:
 #   image:        sub-XXX_<contrast>.nii.gz
@@ -24,6 +28,7 @@
 
 # This script used the script 'rootlets_to_spinal_levels.py' (to get spinal levels), modified from:
 # https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/02a_rootlets_to_spinal_levels.py
+# and the script 'pmj_to_seg_bottom_distance.py' (to get the PMJ -> last SC seg slice distance).
 
 # Usage:
 ## PATH_SCRIPTS=<path/to/spinal-levels> sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh
@@ -33,13 +38,17 @@
 ##                     -path-output <DATA>_202X-XX-XX
 ##                     -jobs 5
 ##
-## PATH_SCRIPTS = folder containing rootlets_to_spinal_levels.py. It must be set because sct_run_batch runs a copy
-## of this bash script from the output folder. Alternatively, run `export PATH_SCRIPTS=...` once in your shell.
+## PATH_SCRIPTS = folder containing rootlets_to_spinal_levels.py and pmj_to_seg_bottom_distance.py. It must be set
+## because sct_run_batch runs a copy of this bash script from the output folder. Alternatively, run
+## `export PATH_SCRIPTS=...` once in your shell.
 ##
 ## Examples:
 ##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh -script-args "c2"               -path-data <DATA> -path-output <OUT>
 ##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh -script-args "pmj rootlets" -path-data <DATA> -path-output <OUT>
 ##   PATH_SCRIPTS=~/code/spinal-levels sct_run_batch -script 01_run_batch_cervical_spinal_levels.sh -script-args "c2 PAM50"         -path-data <DATA> -path-output <OUT>
+##
+## The per-subject PMJ -> last SC seg slice CSVs (REF=pmj) can be merged afterwards in the results folder:
+##   awk 'FNR==1 && NR!=1 {next} {print}' sub-*_pmj_to_seg_bottom.csv > pmj_to_seg_bottom_all.csv
 
 # Authors: Katerina Krejci
 
@@ -75,13 +84,18 @@ case $METHOD in
 esac
 echo "Method for spinal levels: ${METHOD}"
 
-# Folder with rootlets_to_spinal_levels.py.
+# Folder with rootlets_to_spinal_levels.py and pmj_to_seg_bottom_distance.py.
 # sct_run_batch runs a copy of this script from the output folder, so set PATH_SCRIPTS to the repo folder when
 # running through sct_run_batch; otherwise the folder of this script is used.
 PATH_SCRIPTS=${PATH_SCRIPTS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
 SCRIPT_SPINAL_LEVELS="${PATH_SCRIPTS}/rootlets_to_spinal_levels.py"
 if [[ ! -f ${SCRIPT_SPINAL_LEVELS} ]]; then
   echo "ERROR: ${SCRIPT_SPINAL_LEVELS} not found. Set PATH_SCRIPTS to the folder containing it."
+  exit 1
+fi
+SCRIPT_PMJ_TO_CONUS_DISTANCE="${PATH_SCRIPTS}/pmj_to_conus_distance.py"
+if [[ $REF == "pmj" && ! -f ${SCRIPT_PMJ_TO_CONUS_DISTANCE} ]]; then
+  echo "ERROR: ${SCRIPT_PMJ_TO_CONUS_DISTANCE} not found. Set PATH_SCRIPTS to the folder containing it."
   exit 1
 fi
 
@@ -178,6 +192,22 @@ get_spinal_levels(){
   rsync -avzh ${fname_csv} ${PATH_RESULTS}/
 }
 
+# Get the distance along the centerline from the PMJ to the conus medullaris (last axial slice of the SC segmentation),
+# then copy the resulting CSV to the results folder
+get_pmj_to_conus_distance(){
+  local fname_csv="${FILESEG}_pmj_to_conus_distance.csv"
+
+  echo "👉 Getting distance from the PMJ to the conus medullaris (along the centerline)..."
+  $SCT_DIR/python/envs/venv_sct/bin/python ${SCRIPT_PMJ_TO_CONUS_DISTANCE} \
+    -seg ${FILESEG}.nii.gz -pmj ${FILEPMJ}.nii.gz -o ${fname_csv}
+
+  if [[ ! -f ${fname_csv} ]]; then
+    echo "ERROR: expected output ${fname_csv} not found."
+    exit 1
+  fi
+  rsync -avzh ${fname_csv} ${PATH_RESULTS}/
+}
+
 # SCRIPT STARTS HERE
 # ==============================================================================
 # Display useful info for the log, such as SCT version, RAM and CPU cores available
@@ -209,9 +239,11 @@ for contrast in T2w; do
     # Segment spinal cord (only if it does not exist)
     segment_sc_if_does_not_exist
 
-    # Detect PMJ (only if it does not exist and only if the PMJ reference is requested)
+    # Detect PMJ (only if it does not exist and only if the PMJ reference is requested) and get the distance from the
+    # PMJ to the last SC seg slice (conus medullaris)
     if [[ $REF == "pmj" ]]; then
         detect_pmj_if_does_not_exist
+        get_pmj_to_conus_distance
     fi
 
     # Copy the rootlets segmentation if it exists
