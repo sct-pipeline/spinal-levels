@@ -111,7 +111,7 @@ def format_axis(ax, xlabel):
     Axis labels, grid and spines shared by all panels.
     """
     ax.set_xlabel(xlabel, fontsize=FONT_SIZE)
-    ax.set_ylabel('Cord length PMJ to conus [mm]', fontsize=FONT_SIZE)
+    ax.set_ylabel('Cord length PMJ to conus [cm]', fontsize=FONT_SIZE)
     ax.tick_params(axis='both', labelsize=FONT_SIZE - 2)
     ax.grid(alpha=0.2)
     ax.set_axisbelow(True)
@@ -165,7 +165,7 @@ def main():
         ax.text(-0.15, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
                 va='bottom', ha='left')
         data = df_all[df_all['dataset'].isin(datasets)].dropna(subset=[col, 'cord_length_mm'])
-        x, y = data[col].astype(float) / scale, data['cord_length_mm'].astype(float)
+        x, y = data[col].astype(float) / scale, data['cord_length_mm'].astype(float) / 10   # mm -> cm
         rho, p = stats.spearmanr(x, y)
         rho_lo, rho_hi = spearman_ci(rho, len(data))
         print(f'{"+".join(datasets)}: cord length vs {col}: Spearman rho={rho:+.2f} [95% CI {rho_lo:+.2f}, '
