@@ -109,6 +109,6 @@ and the dataset by marker.
 python lumbar-combined/combine_balgrist_epfl.py
 ```
 
-Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/results_and_figures_balgrist_epfl_fudan`):
+Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/figures_lumbar_combined`):
 `lumbar_length_L1-L5_balgrist_epfl_fudan.csv`, `figure_lumbar_length_L1-L5_balgrist_epfl_fudan.png` and
 `figure_correlation_lumbar_length_L1-L5_balgrist_epfl_fudan_height.png`.
