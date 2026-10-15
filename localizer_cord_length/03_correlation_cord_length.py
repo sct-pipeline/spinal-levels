@@ -142,7 +142,10 @@ def main():
 
     # Correlations and figure: cord length vs body height, cervical length and lumbar length
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    for ax, (col, xlabel, scale) in zip(axes, PANELS):
+    for ax, letter, (col, xlabel, scale) in zip(axes, 'ABC', PANELS):
+        # Panel letter in the upper left corner, outside the axes
+        ax.text(-0.15, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
+                va='bottom', ha='left')
         if col not in df.columns:
             plot_placeholder(ax, xlabel)
             continue
