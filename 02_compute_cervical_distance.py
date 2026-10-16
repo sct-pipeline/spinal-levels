@@ -11,6 +11,9 @@ Multiple datasets are supported: pass one results folder per dataset to `-i` and
 (same order) to `-participants`. The height column can be named 'height (cm)', 'height_cm' or 'height' (heights in
 meters are converted to cm automatically). Results of all datasets are combined into one CSV file and one figure.
 
+Optionally (`-analyse-pmj-to-conus`), the per-subject PMJ-to-conus distances (files `*_pmj_to_conus_distance.csv`)
+are aggregated into one table per dataset and one combined table across all datasets.
+
 Figure layout:
 - color = sex (blue = female, orange = male, gray = unknown)
 - marker = dataset (circle = first dataset, triangle = second dataset, then square, diamond, ...)
@@ -21,12 +24,15 @@ Example:
     python compute_c2_c8_distance.py \
         -i ~/results/data-multi-subject ~/results/dataset2 \
         -participants ~/data/data-multi-subject/participants.tsv ~/data/dataset2/participants.tsv \
-        -method rootlets
+        -method rootlets \
+        -analyse-pmj-to-conus
 
 Output:
 - CSV file with the distance between the C2 and C8 levels for each subject (one row per subject), per method and
   dataset, plus one combined CSV file across all datasets
 - Figure with the distance for each subject (all datasets in one figure)
+- With -analyse-pmj-to-conus: CSV file with the PMJ-to-conus distance for each subject, per dataset (all subjects),
+  plus one combined CSV file across all datasets with sex and height, without subjects missing height or sex
 
 The script was inspired by script '03a_generate_figure_inter_rater_variablity-PMJ_COV.py':
 https://github.com/ivadomed/model-spinal-rootlets/blob/main/inter-rater_variability/03a_generate_figure_inter_rater_variablity-PMJ_COV.py
@@ -54,6 +60,9 @@ METHODS = ['rootlets', 'PAM50']
 
 # Column with the per-subject distance for each distance type
 DISTANCE_COL = {'midpoint': 'midpoints_distance_mm', 'total': 'total_distance_mm'}
+
+# Suffix of the per-subject CSV files with the PMJ-to-conus distance
+PMJ_TO_CONUS_SUFFIX = '_pmj_to_conus_distance.csv'
 
 # Default participants.tsv with the subject sex and height (first dataset)
 PARTICIPANTS_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/data-multi-subject/participants.tsv')
@@ -101,6 +110,9 @@ def get_parser():
                         help='Method for spinal level estimation. Default: PAM50')
     parser.add_argument('-distance', choices=['midpoint', 'total'], default='total',
                         help='Distance to compute. Default: total')
+    parser.add_argument('-analyse-pmj-to-conus', action='store_true',
+                        help=f'Also aggregate the PMJ-to-conus distances (files *{PMJ_TO_CONUS_SUFFIX}) into one '
+                             f'table per dataset and one combined table across all datasets.')
     parser.add_argument('-output-folder', default=os.getcwd() + "/figures-and-dataframes",
                         help='Path to the output folder where the CSV files and figure will be saved. '
                              'Default: current working directory.')
@@ -245,6 +257,48 @@ def load_spinal_levels(dir_path, reference, method, out_dir, dataset):
     fname_out = os.path.join(out_dir, f'spinal_levels_ref_{reference}_method_{method}_{dataset}.csv')
     df.to_csv(fname_out, index=False)
     print(f'CSV file saved in {fname_out}.')
+
+    return df
+
+
+def load_pmj_to_conus(dir_path, out_dir, dataset):
+    """
+    Load and aggregate the per-subject PMJ-to-conus distance CSV files (`*_pmj_to_conus_distance.csv`) of one dataset
+    into one table and save it to a CSV file.
+    :param dir_path: path to the folder with the per-subject CSV files
+    :param out_dir: path to the output folder where the aggregated CSV file will be saved
+    :param dataset: dataset name (used in the output file name and the 'dataset' column)
+    :return: dataframe with all rows of all per-subject files plus 'subject' and 'dataset' columns, or None if no
+    files were found
+    """
+    csv_files = sorted(glob.glob(os.path.join(dir_path, '**', f'*{PMJ_TO_CONUS_SUFFIX}'), recursive=True))
+    if not csv_files:
+        print(f'WARNING: no *{PMJ_TO_CONUS_SUFFIX} files found in {dir_path}; skipping PMJ-to-conus for {dataset}.')
+        return None
+
+    list_df = []
+    for csv_file in csv_files:
+        df_file = pd.read_csv(csv_file)
+        # Subject ID from the file name (e.g. sub-001_T2w_pmj_to_conus_distance.csv -> sub-001)
+        df_file['subject'] = os.path.basename(csv_file).split('_')[0]
+        list_df.append(df_file)
+    df = pd.concat(list_df, ignore_index=True)
+    df['dataset'] = dataset
+
+    # subject and dataset as the first columns, sorted by subject
+    df = df[['subject', 'dataset'] + [col for col in df.columns if col not in ('subject', 'dataset')]]
+    df = df.sort_values(by='subject').reset_index(drop=True)
+
+    duplicated = df.loc[df['subject'].duplicated(), 'subject'].unique().tolist()
+    if duplicated:
+        print(f'WARNING: more than one PMJ-to-conus row for subject(s) {duplicated} in {dataset} '
+              f'(e.g. several sessions/runs); all rows are kept.')
+
+    fname_out = os.path.join(out_dir, f'pmj_to_conus_distance_{dataset}.csv')
+    df.to_csv(fname_out, index=False)
+    print(f'PMJ-to-conus distance ({len(csv_files)} file(s), {df["subject"].nunique()} subject(s), {dataset}) '
+          f'saved in {fname_out}.')
+    print(df.describe())
 
     return df
 
@@ -410,12 +464,13 @@ def generate_distance_figure(df_distance, dir_path, reference, method, distance,
     plt.show()
 
 
-def exclude_and_summarize(df_all, dataset_names):
+def exclude_and_summarize(df_all, dataset_names, title='Subjects summary'):
     """
     Exclude subjects with missing height or sex and print, per dataset and in total, how many subjects were excluded
     (and why) and how many were used (females/males).
     :param df_all: combined dataframe (one row per subject) with 'dataset', 'subject', 'sex' and HEIGHT_COL columns
     :param dataset_names: dataset names in the order of -i
+    :param title: title of the printed summary
     :return: dataframe with the included subjects only
     """
     missing_sex = df_all['sex'].isna()
@@ -423,7 +478,7 @@ def exclude_and_summarize(df_all, dataset_names):
     excluded = missing_sex | missing_height
     df_used = df_all[~excluded].reset_index(drop=True)
 
-    print('\n=== Subjects summary ===')
+    print(f'\n=== {title} ===')
     for dataset in list(dataset_names) + ['TOTAL']:
         mask = df_all['dataset'] == dataset if dataset != 'TOTAL' else pd.Series(True, index=df_all.index)
         df_ds_used = df_all[mask & ~excluded]
@@ -462,6 +517,7 @@ def main():
 
     # Compute the distance between the C2 and C8 levels (one value per subject) for each dataset
     list_df_distance = []
+    list_df_conus = []
     for dir_path, fname_participants, dataset in zip(input_dirs, participants_files, dataset_names):
         print(f'\n=== Dataset: {dataset} ({dir_path}) ===')
         df_participants = load_participants(fname_participants)
@@ -473,6 +529,27 @@ def main():
             print(f'WARNING: {len(not_found)} subject(s) of {dataset} not found in {fname_participants}: '
                   f'{not_found}')
         list_df_distance.append(df_distance)
+
+        # PMJ-to-conus distance (independent of the spinal level method)
+        if args.analyse_pmj_to_conus:
+            df_conus = load_pmj_to_conus(dir_path, out_dir, dataset)
+            if df_conus is not None:
+                # Add sex and height (used to exclude subjects without them from the combined table)
+                df_conus = df_conus.drop(columns=['sex', HEIGHT_COL], errors='ignore').merge(
+                    df_participants, how='left', left_on='subject', right_on='participant_id')
+                list_df_conus.append(df_conus)
+
+    # Combine the PMJ-to-conus tables of all datasets into one table, without subjects missing height or sex
+    if args.analyse_pmj_to_conus:
+        if list_df_conus:
+            df_conus_all = pd.concat(list_df_conus, ignore_index=True)
+            df_conus_all = exclude_and_summarize(df_conus_all, dataset_names, title='PMJ-to-conus subjects summary')
+            fname_conus = os.path.join(out_dir, 'pmj_to_conus_distance_all_datasets.csv')
+            df_conus_all.to_csv(fname_conus, index=False)
+            print(f'\nCombined PMJ-to-conus CSV ({len(list_df_conus)} dataset(s), {len(df_conus_all)} row(s)) '
+                  f'saved in {fname_conus}.')
+        else:
+            print(f'\nWARNING: no *{PMJ_TO_CONUS_SUFFIX} files found in any dataset; no PMJ-to-conus table saved.')
 
     # Combine all datasets
     df_all = pd.concat(list_df_distance, ignore_index=True)
