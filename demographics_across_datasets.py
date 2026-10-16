@@ -1,17 +1,13 @@
 """
 TL;DR: Summarize sex and age of the subjects used in the spinal levels analyses, per dataset and pooled across datasets.
 
-Datasets (subjects listed in <dataset>/subjects-to-analyse.yml, except whole-spine, see below) and the source of sex
-and age:
+Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source of sex and age:
     - spine-generic (cervical):  participants.tsv of data-multi-subject
     - whole-spine (cervical):    participants.tsv of whole-spine (ds005616)
     - Balgrist (lumbar):         spreadsheet with the spinal level heights (sex only, age not available yet, see
                                  BALGRIST_AGE)
     - EPFL (lumbar):             participants.tsv of the EPFL lumbar dataset
     - Fudan (lumbar):            L1-L5_lengths.xlsx
-
-Whole-spine: only the subjects with the PMJ-to-conus distance (pmj_to_conus_and_cervical_distance_whole-spine.csv) are
-used, i.e., a subset of whole-spine-ds005616/subjects-to-analyse.yml.
 
 Output (saved to the -o folder):
     - demographics_per_subject.csv: dataset, subject, sex and age of all subjects
@@ -34,8 +30,6 @@ REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
 SPINE_GENERIC_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/data-multi-subject/participants.tsv')
 WHOLE_SPINE_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/whole-spine/participants.tsv')
-WHOLE_SPINE_CSV = os.path.join(DATA_DIR, 'whole-spine_pmj_to_conus_distance',
-                               'pmj_to_conus_and_cervical_distance_whole-spine.csv')
 BALGRIST_XLSX = os.path.join(DATA_DIR, 'lumbar_rootlets_Balgrist', 'bids',
                              'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
 EPFL_TSV = os.path.join(DATA_DIR, 'lumbar_mri_Sergio', 'participants.tsv')
@@ -74,12 +68,7 @@ BALGRIST_AGE = {
 
 
 def read_subjects(dataset):
-    """
-    Subjects used in the analysis, from <dataset folder>/subjects-to-analyse.yml; for whole-spine, only the subjects
-    with the PMJ-to-conus distance.
-    """
-    if dataset == 'whole-spine':
-        return pd.read_csv(WHOLE_SPINE_CSV, sep=';')['subject'].tolist()
+    """Subjects used in the analysis, from <dataset folder>/subjects-to-analyse.yml."""
     with open(os.path.join(REPO_DIR, DATASET_YML[dataset], 'subjects-to-analyse.yml')) as f:
         return yaml.safe_load(f)
 
