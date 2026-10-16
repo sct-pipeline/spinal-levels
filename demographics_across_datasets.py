@@ -4,8 +4,7 @@ TL;DR: Summarize sex and age of the subjects used in the spinal levels analyses,
 Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source of sex and age:
     - spine-generic (cervical):  participants.tsv of data-multi-subject
     - whole-spine (cervical):    participants.tsv of whole-spine (ds005616)
-    - Balgrist (lumbar):         spreadsheet with the spinal level heights (sex only, age not available yet, see
-                                 BALGRIST_AGE)
+    - Balgrist (lumbar):         spreadsheet with the spinal level heights (age at ses-03)
     - EPFL (lumbar):             participants.tsv of the EPFL lumbar dataset
     - Fudan (lumbar):            L1-L5_lengths.xlsx
 
@@ -45,27 +44,6 @@ DATASET_YML = {
     'Fudan': 'lumbar-fudan',
 }
 
-# TODO: age of the Balgrist subjects is not in the spreadsheet; fill in once available
-BALGRIST_AGE = {
-    'sub-ltr02': None,
-    'sub-ltr03': None,
-    'sub-ltr04': None,
-    'sub-ltr05': None,
-    'sub-ltr06': None,
-    'sub-ltr07': None,
-    'sub-ltr08': None,
-    'sub-ltr09': None,
-    'sub-ltr11': None,
-    'sub-ltr13': None,
-    'sub-ltr14': None,
-    'sub-ltr15': None,
-    'sub-ltr17': None,
-    'sub-ltr19': None,
-    'sub-ltr20': None,
-    'sub-ltr23': None,
-    'sub-ltr24': None,
-}
-
 
 def read_subjects(dataset):
     """Subjects used in the analysis, from <dataset folder>/subjects-to-analyse.yml."""
@@ -80,11 +58,10 @@ def load_participants_tsv(fname):
 
 
 def load_balgrist(fname):
-    """Sex from the Balgrist spreadsheet (summary rows below the subjects are dropped); age from BALGRIST_AGE."""
+    """Sex and age (at ses-03) from the Balgrist spreadsheet; summary rows below the subjects are dropped."""
     df = pd.read_excel(fname, sheet_name='Spinal level heights (mm)')
-    df = df.rename(columns={'Participants': 'subject'})
+    df = df.rename(columns={'Participants': 'subject', 'Age at ses-03': 'age'})
     df = df[df['subject'].astype(str).str.startswith('sub-')]
-    df['age'] = df['subject'].map(BALGRIST_AGE)
     return df[['subject', 'sex', 'age']]
 
 
