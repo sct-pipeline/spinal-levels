@@ -1,5 +1,6 @@
 """
-TL;DR: Summarize sex and age of the subjects used in the spinal levels analyses, per dataset and pooled across datasets.
+TL;DR: Summarize sex and age of the subjects used in the spinal levels analyses, per dataset, per region (cervical,
+lumbar) and pooled across datasets.
 
 Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source of sex and age:
     - spine-generic (cervical):  participants.tsv of data-multi-subject
@@ -10,7 +11,7 @@ Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source o
 
 Output (saved to the -o folder):
     - demographics_per_subject.csv: dataset, subject, sex and age of all subjects
-    - demographics_across_datasets.csv: per dataset and pooled: number of subjects, number (%) of females and males
+    - demographics_across_datasets.csv: per dataset, per region (cervical, lumbar) and pooled: number of subjects, number (%) of females and males
       (and unknown sex), age mean ± SD, median and range
 
 Example:
@@ -42,6 +43,12 @@ DATASET_YML = {
     'Balgrist': 'lumbar-balgrist',
     'EPFL': 'lumbar-epfl',
     'Fudan': 'lumbar-fudan',
+}
+
+# Region: datasets
+REGION_DATASETS = {
+    'Cervical': ['spine-generic', 'whole-spine'],
+    'Lumbar': ['Balgrist', 'EPFL', 'Fudan'],
 }
 
 
@@ -160,6 +167,7 @@ def main():
     print(f'CSV file saved in {fname_subjects}.')
 
     rows = [summarize(df[df['dataset'] == dataset], dataset) for dataset in DATASET_YML]
+    rows += [summarize(df[df['dataset'].isin(datasets)], region) for region, datasets in REGION_DATASETS.items()]
     rows.append(summarize(df, 'Pooled'))
     df_summary = pd.DataFrame(rows)
     fname_summary = os.path.join(dir_out, 'demographics_across_datasets.csv')
