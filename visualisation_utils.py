@@ -13,7 +13,7 @@ DATASET_MARKERS = {
     'Balgrist': (6, 2, 0),           # Dataset 3: asterisk
     'EPFL': '^',                 # Dataset 4: triangle
     'Fudan': 'D',                 # Dataset 5: diamond
-    'uk': 'v',                    # Dataset 6: inverted triangle
+    'kcl': 'v',                   # Dataset 6: inverted triangle
 }
 
 FONT_SIZE = 14

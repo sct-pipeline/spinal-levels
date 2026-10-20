@@ -5,7 +5,7 @@ lumbar) and pooled across datasets.
 Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source of sex and age:
     - spine-generic (cervical):  participants.tsv of data-multi-subject
     - whole-spine (cervical):    participants.tsv of whole-spine (ds005616)
-    - uk (cervical):             participants.csv of the King's College London (KCL) dataset
+    - kcl (cervical):            participants.csv of the King's College London (KCL) dataset
     - Balgrist (lumbar):         spreadsheet with the spinal level heights (age at ses-03)
     - EPFL (lumbar):             participants.tsv of the EPFL lumbar dataset
     - Fudan (lumbar):            L1-L5_lengths.xlsx
@@ -42,7 +42,7 @@ OUTPUT_DIR = os.path.join(DATA_DIR, 'figures_across_datasets')
 DATASET_YML = {
     'spine-generic': 'spine-generic-multi-subject',
     'whole-spine': 'whole-spine-ds005616',
-    'uk': 'cervical-kcl',
+    'kcl': 'cervical-kcl',
     'Balgrist': 'lumbar-balgrist',
     'EPFL': 'lumbar-epfl',
     'Fudan': 'lumbar-fudan',
@@ -50,7 +50,7 @@ DATASET_YML = {
 
 # Region: datasets
 REGION_DATASETS = {
-    'Cervical': ['spine-generic', 'whole-spine', 'uk'],
+    'Cervical': ['spine-generic', 'whole-spine', 'kcl'],
     'Lumbar': ['Balgrist', 'EPFL', 'Fudan'],
 }
 
@@ -152,7 +152,7 @@ def print_sentence(rows):
 
     print(f"\nThe following datasets were used: cervical open-access spine-generic multi-subject "
           f"({describe('spine-generic')}),8 whole-spine open-access dataset ({describe('whole-spine')}),9 cervical "
-          f"dataset from King's College London, UK ({describe('uk')}), lumbar dataset from Balgrist University "
+          f"dataset from King's College London, UK ({describe('kcl')}), lumbar dataset from Balgrist University "
           f"Hospital, Switzerland ({describe('Balgrist')}), an open-access lumbar dataset EPFL, Switzerland "
           f"({describe('EPFL')}),10 and an open-access lumbar from Fudan University, China ({describe('Fudan')}).6")
 
@@ -172,7 +172,7 @@ def main():
     df = pd.concat([
         load_dataset('spine-generic', load_participants_tsv(SPINE_GENERIC_TSV)),
         load_dataset('whole-spine', load_participants_tsv(WHOLE_SPINE_TSV)),
-        load_dataset('uk', load_kcl(KCL_CSV)),
+        load_dataset('kcl', load_kcl(KCL_CSV)),
         load_dataset('Balgrist', load_balgrist(BALGRIST_XLSX)),
         load_dataset('EPFL', load_participants_tsv(EPFL_TSV)),
         load_dataset('Fudan', load_fudan(FUDAN_XLSX)),
