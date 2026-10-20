@@ -13,6 +13,7 @@ DATASET_MARKERS = {
     'Balgrist': (6, 2, 0),           # Dataset 3: asterisk
     'EPFL': '^',                 # Dataset 4: triangle
     'Fudan': 'D',                 # Dataset 5: diamond
+    'uk': 'v',                    # Dataset 6: inverted triangle
 }
 
 FONT_SIZE = 14
@@ -27,7 +28,7 @@ SEX_COLOR = {'F': '#d62728', 'M': '#2a78d6', 'unknown': 'gray'}
 DATASET_ALIASES = {}
 
 # Marker sizes (scatter `s`); line-only markers (asterisk) are drawn larger and thicker to match filled markers
-MARKER_SIZE = 30
+MARKER_SIZE = 20
 UNFILLED_MARKER_SIZE_FACTOR = 1.6
 UNFILLED_LINEWIDTH = 1.2
 LEGEND_MARKER_SIZE = 7

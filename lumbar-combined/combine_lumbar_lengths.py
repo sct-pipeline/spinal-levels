@@ -3,7 +3,8 @@ TL;DR: Plot the lumbar spinal cord length (top of L1 to bottom of L5, along the 
 Fudan datasets together.
 
 Figures:
-    - length per subject: subjects stratified by sex (females, then males) and, within each sex, sorted by height
+    - length per subject: all subjects (females and males together) sorted by height (`-sort-by height`, default) or
+      by the L1-L5 length (`-sort-by length`)
     - correlation between the length and subject height (all subjects pooled), with a linear fit (visual guide), its
       95% confidence band, and the Spearman correlation coefficient with its 95% CI
 
@@ -19,11 +20,12 @@ Input:
 
 Output (saved to the -o folder):
     - lumbar_length_L1-L5_balgrist_epfl_fudan.csv: length, sex and height of all subjects, with the dataset
-    - figure_lumbar_length_L1-L5_balgrist_epfl_fudan.png: length per subject
+    - figure_lumbar_length_L1-L5_balgrist_epfl_fudan_sorted_by_height.png (or ..._sorted_by_lumbar_length.png with
+      `-sort-by length`): length per subject
     - figure_correlation_lumbar_length_L1-L5_balgrist_epfl_fudan_height.png: length vs. height
 
 Example:
-    python combine_lumbar_lengths.py
+    python combine_lumbar_lengths.py -sort-by length
 
 Author: Jan Valosek
 """
@@ -78,11 +80,16 @@ def datasets_in_order(df):
     return list(get_dataset_markers(df['dataset'].unique()))
 
 
-def generate_length_figure(df, dir_out):
+def generate_length_figure(df, dir_out, sort_by='height'):
     """
-    Length per subject: subjects stratified by sex (females, then males) and, within each sex, sorted by height.
+    Length per subject: all subjects (females and males together) sorted by height or by the L1-L5 length (ascending).
+    Sex is shown by color, the dataset by marker.
+    :param df: dataframe with 'dataset', 'subject', 'length_mm', 'sex' and 'height' columns
+    :param dir_out: output folder
+    :param sort_by: 'height' or 'length'
     """
-    df = df.sort_values(['sex', 'height', 'subject']).reset_index(drop=True)   # 'F' before 'M'
+    sort_cols = ['height', 'length_mm', 'subject'] if sort_by == 'height' else ['length_mm', 'height', 'subject']
+    df = df.sort_values(sort_cols).reset_index(drop=True)
     x = np.arange(1, len(df) + 1)
     y = df['length_mm'].to_numpy() / 10  # convert mm to cm
     dataset_markers = get_dataset_markers(df['dataset'].unique())
@@ -94,16 +101,10 @@ def generate_length_figure(df, dir_out):
             if mask.any():
                 scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=marker)
 
-    # Vertical line between females and males, with the group names
-    n_female = (df['sex'] == 'F').sum()
-    ax.axvline(n_female + 0.5, color='gray', linestyle='--', linewidth=1)
-    for sex, x_center in (('F', (n_female + 1) / 2), ('M', (n_female + 1 + len(df)) / 2)):
-        ax.text(x_center, 11.5, SEX_LABEL[sex], ha='center', va='top', fontsize=FONT_SIZE - 2,
-                color=SEX_COLOR[sex])
-
+    sort_label = 'height' if sort_by == 'height' else 'L1–L5 length'
     ax.set_xticks([])   # subject IDs not shown
     ax.set_xlim(0.5, len(df) + 0.5)
-    ax.set_xlabel('Subjects stratified by sex and sorted by height', fontsize=FONT_SIZE)
+    ax.set_xlabel(f'Subjects sorted by {sort_label}', fontsize=FONT_SIZE)
     ax.set_ylim(0, 12)
     ax.set_ylabel(YLABEL, fontsize=FONT_SIZE)
     ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
@@ -114,7 +115,8 @@ def generate_length_figure(df, dir_out):
     add_legend_above(ax, legend_handles(df, dataset_markers), ncol=3)
     plt.tight_layout()
 
-    fname_figure = os.path.join(dir_out, 'figure_lumbar_length_L1-L5_balgrist_epfl_fudan.png')
+    sort_part = 'height' if sort_by == 'height' else 'lumbar_length'
+    fname_figure = os.path.join(dir_out, f'figure_lumbar_length_L1-L5_balgrist_epfl_fudan_sorted_by_{sort_part}.png')
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
 
@@ -190,6 +192,9 @@ def main():
                         help=f'CSV file with the EPFL lengths. Default: {EPFL_CSV}')
     parser.add_argument('-fudan', default=FUDAN_XLSX,
                         help=f'XLSX file with the Fudan lengths. Default: {FUDAN_XLSX}')
+    parser.add_argument('-sort-by', choices=['height', 'length'], default='height',
+                        help='Order of the subjects on the x-axis of the length figure: by height or by the L1-L5 '
+                             'length (ascending). Default: height')
     parser.add_argument('-o', default=OUTPUT_DIR,
                         help=f'Output folder for the CSV file and the figures. Default: {OUTPUT_DIR}')
     args = parser.parse_args()
@@ -213,7 +218,7 @@ def main():
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
-    generate_length_figure(df, dir_out)
+    generate_length_figure(df, dir_out, args.sort_by)
     generate_correlation_figure(df, dir_out)
     print_summary(df)
     plt.show()
