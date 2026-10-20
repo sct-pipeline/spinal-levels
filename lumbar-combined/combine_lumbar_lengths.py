@@ -100,8 +100,7 @@ def generate_length_figure(df, dir_out):
         ax.text(x_center, 11.5, SEX_LABEL[sex], ha='center', va='top', fontsize=FONT_SIZE - 2,
                 color=SEX_COLOR[sex])
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(df['subject'], rotation=45, ha='right', fontsize=FONT_SIZE - 5)
+    ax.set_xticks([])   # subject IDs not shown
     ax.set_xlim(0.5, len(df) + 0.5)
     ax.set_xlabel('Subjects stratified by sex and sorted by height', fontsize=FONT_SIZE)
     ax.set_ylim(0, 12)
