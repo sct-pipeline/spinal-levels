@@ -4,7 +4,8 @@ Fudan datasets together.
 
 Figures:
     - length per subject: all subjects (females and males together) sorted by height (`-sort-by height`, default) or
-      by the L1-L5 length (`-sort-by length`)
+      by the L1-L5 length (`-sort-by length`). When sorted by height, short vertical lines at the bottom mark where the
+      height reaches each 10 cm (labelled "150 cm", "160 cm", ...; `-height-step` changes the step, 0 disables them)
     - correlation between the length and subject height (all subjects pooled), with a linear fit (visual guide), its
       95% confidence band, and the Spearman correlation coefficient with its 95% CI
 
@@ -80,13 +81,40 @@ def datasets_in_order(df):
     return list(get_dataset_markers(df['dataset'].unique()))
 
 
-def generate_length_figure(df, dir_out, sort_by='height'):
+def draw_height_marks(ax, heights, step=10):
+    """
+    Draw a short vertical line at the bottom of the plot where the height of the (height-sorted) subjects reaches each
+    multiple of `step` cm, labelled with that height (e.g. '150 cm', '160 cm', ...). The line is placed just before the
+    first subject with height >= that value; the label is drawn to its right so it never crosses the y-axis.
+    :param ax: matplotlib axes
+    :param heights: heights (cm) of the subjects in x-axis order (ascending), subject i at x = i + 1
+    :param step: height step in cm (e.g. 10)
+    """
+    heights = np.asarray(heights, dtype=float)
+    if len(heights) == 0:
+        return
+    transform = ax.get_xaxis_transform()  # x in data coordinates, y in axes coordinates
+    first_mark = np.ceil(heights.min() / step) * step
+    for mark in np.arange(first_mark, heights.max() + step / 2, step):
+        idx = np.argmax(heights >= mark)  # first subject reaching this height (heights are sorted)
+        if heights[idx] < mark:
+            continue
+        x_mark = idx + 1 - 0.5
+        ax.plot([x_mark, x_mark], [0, 0.06], transform=transform, color='dimgray', linewidth=1, zorder=2,
+                clip_on=False)
+        ax.annotate(f'{mark:.0f} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
+                    textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 3, color='dimgray')
+
+
+def generate_length_figure(df, dir_out, sort_by='height', height_step=10):
     """
     Length per subject: all subjects (females and males together) sorted by height or by the L1-L5 length (ascending).
-    Sex is shown by color, the dataset by marker.
+    Sex is shown by color, the dataset by marker. When sorted by height, short vertical lines at the bottom mark where
+    the height reaches each `height_step` cm.
     :param df: dataframe with 'dataset', 'subject', 'length_mm', 'sex' and 'height' columns
     :param dir_out: output folder
     :param sort_by: 'height' or 'length'
+    :param height_step: step (cm) of the height marks drawn when sorted by height; 0 disables them
     """
     sort_cols = ['height', 'length_mm', 'subject'] if sort_by == 'height' else ['length_mm', 'height', 'subject']
     df = df.sort_values(sort_cols).reset_index(drop=True)
@@ -100,6 +128,10 @@ def generate_length_figure(df, dir_out, sort_by='height'):
             mask = ((df['sex'] == sex) & (df['dataset'] == dataset)).to_numpy()
             if mask.any():
                 scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=marker)
+
+    # Height marks (only meaningful when the subjects are sorted by height)
+    if sort_by == 'height' and height_step > 0:
+        draw_height_marks(ax, df['height'].to_numpy(), height_step)
 
     sort_label = 'height' if sort_by == 'height' else 'L1–L5 length'
     ax.set_xticks([])   # subject IDs not shown
@@ -195,6 +227,10 @@ def main():
     parser.add_argument('-sort-by', choices=['height', 'length'], default='height',
                         help='Order of the subjects on the x-axis of the length figure: by height or by the L1-L5 '
                              'length (ascending). Default: height')
+    parser.add_argument('-height-step', type=float, default=10,
+                        help='When sorted by height, draw a short vertical line with a label (e.g. "150 cm", '
+                             '"160 cm") where the height reaches each multiple of this step (cm); 0 disables them. '
+                             'Default: 10')
     parser.add_argument('-o', default=OUTPUT_DIR,
                         help=f'Output folder for the CSV file and the figures. Default: {OUTPUT_DIR}')
     args = parser.parse_args()
@@ -218,7 +254,7 @@ def main():
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
-    generate_length_figure(df, dir_out, args.sort_by)
+    generate_length_figure(df, dir_out, args.sort_by, args.height_step)
     generate_correlation_figure(df, dir_out)
     print_summary(df)
     plt.show()
