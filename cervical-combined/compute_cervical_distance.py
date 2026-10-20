@@ -16,7 +16,8 @@ are aggregated into one table per dataset and one combined table across all data
 
 Figure layout:
 - color = sex (blue = female, orange = male, gray = unknown)
-- marker = dataset (circle = first dataset, triangle = second dataset, then square, diamond, ...)
+- marker = dataset, fixed per dataset name in visualisation_utils.py (Dataset 1 = circle, Dataset 2 = square,
+  Dataset 3 = asterisk, Dataset 4 = triangle), consistent across scripts even if only some datasets are included
 - x-axis: females first (sorted by height), then males (sorted by height), separated by a dashed line
 Subjects with missing height or sex are excluded; a summary of included/excluded subjects per dataset is printed.
 
@@ -45,11 +46,10 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
+# Shared plotting conditions (font, sex colors, dataset markers, marker sizes, legend), same in all figure scripts
+from visualisation_utils import (SPINAL_REGIONAL_LENGTH_FIGSIZE, FONT_SIZE, SEX_ORDER, SEX_LABEL, SEX_COLOR,
+                                 get_dataset_markers, scatter_points, legend_handles, add_legend_above)
 
-
-FONT_SIZE = 14
 
 # Levels used for the distance computation: C2 and C8
 FIRST_LEVEL = 2
@@ -72,13 +72,7 @@ HEIGHT_COLUMNS = ['height (cm)', 'height_cm', 'height']
 # Unified height column used internally (always in cm)
 HEIGHT_COL = 'height_cm'
 
-# Sex groups in the order they appear on the x-axis, their labels and colors (single-method figure)
-SEX_ORDER = ['F', 'M', 'unknown']
-SEX_LABEL = {'F': 'Female', 'M': 'Male', 'unknown': 'Sex unknown'}
-SEX_COLOR = {'F': '#2a78d6', 'M': '#eb6834', 'unknown': 'gray'}
-
-# Markers per dataset (in the order of -i): circle, triangle, then square, diamond, ...
-DATASET_MARKERS = ['o', '^', 's', 'D', 'v', 'P']
+# Sex order/labels/colors and dataset markers are defined in visualisation_utils.py
 
 
 def get_parser():
@@ -103,7 +97,9 @@ def get_parser():
                              f'Default: {PARTICIPANTS_TSV}')
     parser.add_argument('-dataset-names', nargs='+', default=None,
                         help='Short name for each dataset (same order as -i), used in the output file names and '
-                             'the figure legend. Default: name of the folder containing each participants.tsv.')
+                             'the figure legend. Must match the names in DATASET_MARKERS '
+                             '(visualisation_utils.py). Default: name of the folder containing each '
+                             'participants.tsv.')
     parser.add_argument('-reference', choices=['pmj', 'c2'], default='c2',
                         help='Reference point for distance computation. Default: c2')
     parser.add_argument('-method', choices=METHODS, default='PAM50',
@@ -351,13 +347,6 @@ def order_subjects(df_subjects, height_col=HEIGHT_COL):
     return df
 
 
-def get_dataset_markers(datasets):
-    """
-    Assign a marker to each dataset (in the given order): circle, triangle, square, ...
-    """
-    return {dataset: DATASET_MARKERS[i % len(DATASET_MARKERS)] for i, dataset in enumerate(datasets)}
-
-
 def draw_sex_groups(ax, df_ordered):
     """
     Draw a dashed vertical line between the sex groups, label each group above the points and draw a dotted line
@@ -388,18 +377,6 @@ def draw_sex_groups(ax, df_ordered):
                     color='dimgray')
 
 
-def add_legends(ax, color_handles, dataset_markers, df_ordered):
-    """
-    Add one legend in a single row above the plot (upper right): colors (sex) followed by dataset markers.
-    """
-    dataset_handles = [Line2D([], [], linestyle='', marker=marker, color='dimgray', markersize=7,
-                              label=f"{dataset} (n = {(df_ordered['dataset'] == dataset).sum()})")
-                       for dataset, marker in dataset_markers.items()]
-    handles = color_handles + dataset_handles
-    ax.legend(handles=handles, loc='lower right', bbox_to_anchor=(1.0, 1.0), ncol=len(handles), frameon=False,
-              fontsize=FONT_SIZE - 5, handlelength=1.2, columnspacing=1.2, borderaxespad=0.2)
-
-
 def style_axes(ax, n_subjects, distance, first_level, last_level, y_max):
     """
     Common axes styling.
@@ -424,7 +401,7 @@ def generate_distance_figure(df_distance, dir_path, reference, method, distance,
     """
     Generate a figure with subjects on the x-axis (females first, then males, each sorted by height) and the distance
     between the `first_level` and `last_level` on the y-axis (one point per subject). Color encodes sex, marker
-    encodes dataset.
+    encodes dataset (fixed per dataset name, see DATASET_MARKERS in visualisation_utils.py).
     :param df_distance: dataframe returned by compute_and_save_distance() (all datasets) with added 'sex' and
     `height_col` columns
     :param dir_path: path to the output folder where the figure will be saved
@@ -436,24 +413,24 @@ def generate_distance_figure(df_distance, dir_path, reference, method, distance,
     :param height_col: name of the column with subject height (cm)
     """
     dist_col = DISTANCE_COL[distance]
-    dataset_markers = get_dataset_markers(df_distance['dataset'].unique())  # order of -i
+    # Fixed marker per dataset name (independent of which datasets are included and of the order of -i)
+    dataset_markers = get_dataset_markers(df_distance['dataset'].unique())
     df_plot = order_subjects(df_distance, height_col)
 
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=SPINAL_REGIONAL_LENGTH_FIGSIZE)
     for dataset, marker in dataset_markers.items():
         for sex_key in SEX_ORDER:
             df_sub = df_plot[(df_plot['dataset'] == dataset) & (df_plot['sex_key'] == sex_key)]
             if df_sub.empty:
                 continue
-            ax.scatter(df_sub['x'], df_sub[dist_col] / 10,  # convert mm to cm for plotting
-                       color=SEX_COLOR[sex_key], marker=marker, s=30, zorder=3)
+            scatter_points(ax, df_sub['x'], df_sub[dist_col] / 10,  # convert mm to cm for plotting
+                           color=SEX_COLOR[sex_key], marker=marker)
 
     draw_sex_groups(ax, df_plot)
     style_axes(ax, len(df_plot), distance, first_level, last_level, y_max=12)
 
-    color_handles = [Patch(color=SEX_COLOR[sex_key], label=SEX_LABEL[sex_key])
-                     for sex_key in SEX_ORDER if (df_plot['sex_key'] == sex_key).any()]
-    add_legends(ax, color_handles, dataset_markers, df_plot)
+    # Shared legend above the plot: sex (color) then datasets (marker), with n
+    add_legend_above(ax, legend_handles(df_plot, dataset_markers, sex_col='sex_key'))
 
     plt.tight_layout()
 
@@ -514,6 +491,9 @@ def main():
         dataset_names = args.dataset_names
     if len(dataset_names) != len(input_dirs) or len(set(dataset_names)) != len(dataset_names):
         parser.error('-dataset-names must give one unique name per dataset (same order as -i).')
+
+    # Check early that every dataset has a fixed marker (raises with the list of defined names otherwise)
+    get_dataset_markers(dataset_names)
 
     # Compute the distance between the C2 and C8 levels (one value per subject) for each dataset
     list_df_distance = []
