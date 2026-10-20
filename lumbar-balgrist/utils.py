@@ -23,7 +23,7 @@ FONT_SIZE = 14
 
 # Data: labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz) and the Excel file with the subject sex
 # and height ('sex' and 'Height (cm)' columns in the 'Spinal level heights (mm)' sheet)
-DATA_DIR = os.path.expanduser('~/data/spinal-levels/lumbar_rootlets_Balgrist')
+DATA_DIR = os.path.expanduser('~/data/spinal-levels/lumbar_Balgrist')
 INPUT_DIR = os.path.join(DATA_DIR, 'bids')
 PARTICIPANTS_XLSX = os.path.join(INPUT_DIR, 'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
 # Output folder for the CSV files and figures

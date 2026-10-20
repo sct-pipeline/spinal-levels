@@ -29,9 +29,9 @@ REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
 SPINE_GENERIC_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/data-multi-subject/participants.tsv')
 WHOLE_SPINE_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/whole-spine/participants.tsv')
-BALGRIST_XLSX = os.path.join(DATA_DIR, 'lumbar_rootlets_Balgrist', 'bids',
+BALGRIST_XLSX = os.path.join(DATA_DIR, 'lumbar_Balgrist', 'bids',
                              'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
-EPFL_TSV = os.path.join(DATA_DIR, 'lumbar_mri_Sergio', 'participants.tsv')
+EPFL_TSV = os.path.join(DATA_DIR, 'lumbar_epfl', 'participants.tsv')
 FUDAN_XLSX = os.path.join(DATA_DIR, 'lumbar_fudan', 'L1-L5_lengths.xlsx')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'figures_across_datasets')
 
