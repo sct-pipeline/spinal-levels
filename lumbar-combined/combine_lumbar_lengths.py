@@ -40,7 +40,8 @@ from scipy import stats
 # elsewhere in the repo
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from visualisation_utils import (FONT_SIZE, SEX_LABEL, SEX_COLOR, get_dataset_markers, scatter_points,  # noqa: E402
-                                 legend_handles, add_legend_above, plot_correlation, spearman_ci)
+                                 legend_handles, add_legend_above, plot_correlation, spearman_ci,
+                                 SPINAL_REGIONAL_LENGTH_FIGSIZE)
 
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
 BALGRIST_CSV = os.path.join(DATA_DIR, 'lumbar_Balgrist', 'results_and_figures',
@@ -86,7 +87,7 @@ def generate_length_figure(df, dir_out):
     y = df['length_mm'].to_numpy() / 10  # convert mm to cm
     dataset_markers = get_dataset_markers(df['dataset'].unique())
 
-    fig, ax = plt.subplots(figsize=(max(6, len(df) * 0.35), 5))
+    fig, ax = plt.subplots(figsize=SPINAL_REGIONAL_LENGTH_FIGSIZE)
     for dataset, marker in dataset_markers.items():
         for sex in SEXES:
             mask = ((df['sex'] == sex) & (df['dataset'] == dataset)).to_numpy()

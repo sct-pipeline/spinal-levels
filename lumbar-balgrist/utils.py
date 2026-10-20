@@ -31,8 +31,8 @@ OUTPUT_DIR = os.path.join(DATA_DIR, 'results_and_figures')
 PARTICIPANTS_SHEET = 'Spinal level heights (mm)'
 
 # Female and male colors and markers
-SEX_STYLE = {'F': {'color': '#2a78d6', 'marker': 'o', 'label': 'Female'},
-             'M': {'color': '#eb6834', 'marker': 's', 'label': 'Male'}}
+SEX_STYLE = {'F': {'color': '#d62728', 'marker': 'o', 'label': 'Female'},
+             'M': {'color': '#2a78d6', 'marker': 's', 'label': 'Male'}}
 
 
 def add_sex_height(df, fname_xlsx):

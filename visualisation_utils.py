@@ -20,7 +20,7 @@ FONT_SIZE = 14
 # Sex: order on the x-axis, labels and colors
 SEX_ORDER = ['F', 'M', 'unknown']
 SEX_LABEL = {'F': 'Female', 'M': 'Male', 'unknown': 'Sex unknown'}
-SEX_COLOR = {'F': '#2a78d6', 'M': '#eb6834', 'unknown': 'gray'}
+SEX_COLOR = {'F': '#d62728', 'M': '#2a78d6', 'unknown': 'gray'}
 
 # Other names of the same dataset used by some scripts (e.g. the folder name used by default as the dataset name)
 # -> name in DATASET_MARKERS, e.g. {'data-multi-subject': 'EPFL'}

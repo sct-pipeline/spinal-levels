@@ -15,7 +15,7 @@ Optionally (`-analyse-pmj-to-conus`), the per-subject PMJ-to-conus distances (fi
 are aggregated into one table per dataset and one combined table across all datasets.
 
 Figure layout:
-- color = sex (blue = female, orange = male, gray = unknown)
+- color = sex (red = female, blue = male, gray = unknown)
 - marker = dataset, fixed per dataset name in visualisation_utils.py (Dataset 1 = circle, Dataset 2 = square,
   Dataset 3 = asterisk, Dataset 4 = triangle), consistent across scripts even if only some datasets are included
 - x-axis: females first (sorted by height), then males (sorted by height), separated by a dashed line

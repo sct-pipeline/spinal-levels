@@ -25,8 +25,8 @@ METRICS = {
 FONT_SIZE = 14
 
 # Female and male colors and markers
-SEX_STYLE = {'F': {'color': '#2a78d6', 'marker': 'o', 'label': 'Female'},
-             'M': {'color': '#eb6834', 'marker': 's', 'label': 'Male'}}
+SEX_STYLE = {'F': {'color': '#d62728', 'marker': 'o', 'label': 'Female'},
+             'M': {'color': '#2a78d6', 'marker': 's', 'label': 'Male'}}
 
 
 def spearman_ci(rho, n, alpha=0.05):
