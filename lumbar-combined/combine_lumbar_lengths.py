@@ -42,9 +42,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from utils import FONT_SIZE, SEX_STYLE, spearman_ci, linear_fit_ci_band  # noqa: E402
 
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
-BALGRIST_CSV = os.path.join(DATA_DIR, 'lumbar_rootlets_Balgrist', 'results_and_figures',
+BALGRIST_CSV = os.path.join(DATA_DIR, 'lumbar_Balgrist', 'results_and_figures',
                             'lumbar_length_L1-L5_centerline.csv')
-EPFL_CSV = os.path.join(DATA_DIR, 'lumbar_mri_Sergio', 'results_and_figures', 'lumbar_length_L1-L5_along_centerline.csv')
+EPFL_CSV = os.path.join(DATA_DIR, 'lumbar_epfl', 'results_and_figures', 'lumbar_length_L1-L5_along_centerline.csv')
 FUDAN_XLSX = os.path.join(DATA_DIR, 'lumbar_fudan', 'L1-L5_lengths.xlsx')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'figures_lumbar_combined')
 

@@ -32,8 +32,8 @@ The script requires the SCT conda environment to be activated:
     conda activate venv_sct
 
 Example:
-    python lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks
-    python lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks -metric midpoints
+    python lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_epfl/spinalcord_masks
+    python lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_epfl/spinalcord_masks -metric midpoints
 
 Author: Jan Valosek
 """

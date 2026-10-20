@@ -74,13 +74,13 @@ python lumbar-balgrist/lumbar_length_count_slices.py -i <folder with sub-*/*_spi
 python lumbar-balgrist/correlation_length_height.py -i <output folder>/lumbar_length_L1-L5.csv
 ```
 
-Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures`):
+Outputs (in the folder passed to `-o`, default `~/data/spinal-levels/lumbar_Balgrist/results_and_figures`):
 `lumbar_<metric>.csv` (length per subject, and the min slice, max slice and
 midpoint slice of each spinal level) and `figure_lumbar_<metric>.png`.
 
 ## Lumbar EPFL dataset
 
-Scripts for the lumbar EPFL dataset (`~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks`) are in
+Scripts for the lumbar EPFL dataset (`~/data/spinal-levels/lumbar_epfl/spinalcord_masks`) are in
 [`lumbar-epfl/`](lumbar-epfl). Input: spinal cord masks with the personalized spinal levels saved one level per file
 (`sub-*/ses-*/anat/*_label-SC_desc-<level>_mask.nii.gz`, `desc-L1` ... `desc-S2`), and `participants.tsv` (sex and
 height) one level above the masks folder.
@@ -91,7 +91,7 @@ height) one level above the masks folder.
 | `lumbar-epfl/lumbar_length_along_centerline.py` | Same lengths, but measured along the spinal cord centerline (SCT `get_centerline`, `ParamCenterline`: bspline, smooth=30) to account for the cord curvature; also saves the fitted centerlines for QC. |
 
 ```bash
-python lumbar-epfl/lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_mri_Sergio/spinalcord_masks
+python lumbar-epfl/lumbar_length_count_slices.py -i ~/data/spinal-levels/lumbar_epfl/spinalcord_masks
 ```
 
 Outputs (in the current working directory): `lumbar_<metric>_masks.csv`, `figure_lumbar_<metric>_masks.png` and
