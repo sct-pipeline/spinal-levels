@@ -23,7 +23,9 @@ Figure layout:
 - x-axis: all subjects (females and males together) sorted by height (`-sort-by height`, default) or by the plotted
   C2-C8 length (`-sort-by length`). With `-stratify-by-sex`, females come first, then males, each group sorted
   separately and separated by a dashed line. When sorted by height, subjects without height are placed at the end
-  (no separator line); use `-exclude-missing-height` to leave them out of the figure
+  (no separator line); use `-exclude-missing-height` to leave them out of the figure. When sorted by height, short
+  vertical lines at the bottom mark where the height reaches each 10 cm (labelled "150 cm", "160 cm", ...;
+  `-height-step` changes the step, 0 disables them)
 - one point per row of the tables, i.e. per subject/session for final tables with several sessions
 
 Example:
@@ -133,6 +135,10 @@ def get_parser():
     parser.add_argument('-sort-by', choices=['height', 'length'], default='height',
                         help='Order of the subjects on the x-axis: by height or by the plotted C2-C8 length '
                              '(ascending). Default: height')
+    parser.add_argument('-height-step', type=float, default=10,
+                        help='When sorted by height, draw a short vertical line with a label (e.g. "150 cm", '
+                             '"160 cm") where the height reaches each multiple of this step (cm); 0 disables them. '
+                             'Default: 10')
     parser.add_argument('-stratify-by-sex', action='store_true',
                         help='Sort females and males in separate groups (females first), separated by a dashed line. '
                              'Default: all subjects sorted together, sex shown by color only.')
@@ -320,6 +326,41 @@ def draw_sex_groups(ax, df_ordered):
                 transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=FONT_SIZE - 3)
 
 
+def draw_height_marks(ax, df_ordered, height_col=HEIGHT_COL, step=10, stratify_by_sex=False):
+    """
+    Draw a short vertical line at the bottom of the plot where the height of the (height-sorted) subjects reaches each
+    multiple of `step` cm, labelled with that height (e.g. '150 cm', '160 cm', ...). The line is placed just before the
+    first subject with height >= that value. With `stratify_by_sex`, the marks are drawn within each sex group.
+    Subjects without height are ignored.
+    :param ax: matplotlib axes
+    :param df_ordered: dataframe returned by order_subjects() with sort_by='height'
+    :param height_col: name of the column with subject height (cm)
+    :param step: height step in cm (e.g. 10)
+    :param stratify_by_sex: subjects are ordered in separate sex groups
+    """
+    groups = [df_ordered[df_ordered['sex_key'] == sex_key] for sex_key in SEX_ORDER] if stratify_by_sex \
+        else [df_ordered]
+    transform = ax.get_xaxis_transform()  # x in data coordinates, y in axes coordinates
+    for df_group in groups:
+        df_height = df_group[df_group[height_col].notna()]
+        if df_height.empty:
+            continue
+        heights = df_height[height_col].to_numpy()
+        xs = df_height['x'].to_numpy()
+        first_mark = np.ceil(heights.min() / step) * step
+        for mark in np.arange(first_mark, heights.max() + step / 2, step):
+            idx = np.argmax(heights >= mark)  # first subject reaching this height (heights are sorted)
+            if heights[idx] < mark:
+                continue
+            x_mark = xs[idx] - 0.5
+            ax.plot([x_mark, x_mark], [0, 0.06], transform=transform, color='dimgray', linewidth=1, zorder=2,
+                    clip_on=False)
+            # Label to the right of the line (a few points away), so it never crosses the y-axis
+            ax.annotate(f'{mark:.0f} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
+                        textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 3,
+                        color='dimgray')
+
+
 def style_axes(ax, n_subjects, distance, first_level, last_level, sort_by='height', stratify_by_sex=False):
     """
     Common axes styling.
@@ -343,7 +384,7 @@ def style_axes(ax, n_subjects, distance, first_level, last_level, sort_by='heigh
 
 def generate_distance_figure(df_distance, fname_figure, distance, first_level=FIRST_LEVEL, last_level=LAST_LEVEL,
                              height_col=HEIGHT_COL, show=True, sort_by='height', marker_edge_width=0.8,
-                             stratify_by_sex=False):
+                             stratify_by_sex=False, height_step=10):
     """
     Generate a figure with subjects on the x-axis (all sorted together by height or by length, see `sort_by`; or
     females first, then males, with `stratify_by_sex`) and the distance between the `first_level` and `last_level` on
@@ -359,6 +400,7 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
     :param sort_by: order of the subjects on the x-axis, 'height' or 'length'
     :param marker_edge_width: width of the white border around the markers (points); 0 disables it
     :param stratify_by_sex: sort females and males in separate groups, separated by a dashed line
+    :param height_step: step (cm) of the height marks drawn when sorted by height; 0 disables them
     """
     dist_col = DISTANCE_COL[distance]
     # Fixed marker per dataset name (independent of which datasets are included and of their order)
@@ -380,6 +422,9 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
 
     if stratify_by_sex:
         draw_sex_groups(ax, df_plot)
+    # Height marks (only meaningful when the subjects are sorted by height)
+    if sort_by == 'height' and height_step > 0:
+        draw_height_marks(ax, df_plot, height_col, height_step, stratify_by_sex)
     style_axes(ax, len(df_plot), distance, first_level, last_level, sort_by, stratify_by_sex)
 
     # Shared legend above the plot: sex (color) then datasets (marker), with n
@@ -468,7 +513,8 @@ def main():
         fname_figure = os.path.join(out_dir, default_figure_name(df, distance, args.sort_by, args.stratify_by_sex))
     print(f'Subjects sorted by {args.sort_by}{" within each sex group" if args.stratify_by_sex else ""}.')
     generate_distance_figure(df, fname_figure, distance, show=not args.no_show, sort_by=args.sort_by,
-                             marker_edge_width=args.marker_edge_width, stratify_by_sex=args.stratify_by_sex)
+                             marker_edge_width=args.marker_edge_width, stratify_by_sex=args.stratify_by_sex,
+                             height_step=args.height_step)
 
 
 if __name__ == '__main__':
