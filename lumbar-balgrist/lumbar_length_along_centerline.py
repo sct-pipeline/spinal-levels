@@ -23,7 +23,7 @@ Input:
 - folder with manually labeled spinal cord segmentations (sub-*/*_spinallevels_dseg.nii.gz) with one value per
 spinal level: 1=L1, 2=L2, 3=L3, 4=L4, 5=L5, 6=S1, 7=S2.
 
-Output (saved to the -o folder, default: ~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures;
+Output (saved to the -o folder, default: ~/data/spinal-levels/lumbar_Balgrist/results_and_figures;
 <metric> is length_L1-L5 or midpoints_distance_L1-S1):
     - lumbar_<metric>_centerline.csv: length along the centerline per subject, with sex and height
     - figure_lumbar_<metric>_centerline.png: the same length plotted per subject

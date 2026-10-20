@@ -6,9 +6,9 @@ Input:
   (lumbar_midpoints_distance_L1-S1.csv with -metric midpoints, or lumbar_length_L1-L5.csv with -metric top-bottom).
   The length is read from the column starting with 'midpoints_distance_' or 'length_', and the subject sex and
   height from the 'sex' and 'height' columns.
-  (default: ~/data/spinal-levels/lumbar_rootlets_Balgrist/results_and_figures/lumbar_midpoints_distance_L1-S1.csv)
+  (default: ~/data/spinal-levels/lumbar_Balgrist/results_and_figures/lumbar_midpoints_distance_L1-S1.csv)
 - Excel file with the subject sex and height, used only if the CSV file has no 'sex' and 'height' columns
-  (default: ~/data/spinal-levels/lumbar_rootlets_Balgrist/bids/spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx)
+  (default: ~/data/spinal-levels/lumbar_Balgrist/bids/spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx)
 
 Output (saved to the same folder as the input CSV):
     - figure_correlation_<length>_height.png: scatter plot with a linear fit (visual guide) and the Spearman
