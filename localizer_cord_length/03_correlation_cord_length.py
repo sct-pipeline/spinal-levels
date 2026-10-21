@@ -16,9 +16,12 @@ Output:
     - cord_length_vs_spinal_levels.csv (saved to the same folder as the input CSV): cord length, L1-S2 and L1-L5
       lengths, body height, weight, sex and BMI per subject
     - cord_length_comparison.png (saved to the -o folder): cord length vs body height, C2-C8 length and L1-L5 length,
-      with the Spearman correlation and a linear fit with its 95% confidence band. Font, sex colors, dataset markers
+      with the Spearman correlation and a linear fit with its 95% confidence band (top row), and the cord length per
+      subject with the subjects sorted by the same variable, with marks at regular values of it (bottom row). Font, sex colors, dataset markers
       (Balgrist localizer = Balgrist marker), marker sizes and the legend are shared with the other figure scripts via
       ../visualisation_utils.py
+    - cord_length_per_subject_sorted_by_length.png (saved to the -o folder): cord length per subject (Balgrist
+      localizer and whole-spine datasets pooled), subjects sorted by the cord length
 
 Example:
     python 03_correlation_cord_length.py -i cord_length.csv -xlsx spinal_level_heights_top_L1-bottom_S2.xlsx \
@@ -40,8 +43,9 @@ from scipy import stats
 # Shared plotting conditions and correlation helpers (visualisation_utils.py in the repo root)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from visualisation_utils import (FONT_SIZE, SEX_ORDER, SEX_COLOR, FIT_COLOR, FIT_LINEWIDTH, FIT_BAND_COLOR,  # noqa: E402
-                                 FIT_BAND_ALPHA, FIT_LEGEND_LABEL, MARKER_SIZE, get_dataset_markers, scatter_points,
-                                 legend_handles, spearman_ci, linear_fit_ci_band, format_p)
+                                 FIT_BAND_ALPHA, FIT_LEGEND_LABEL, MARKER_SIZE, SPINAL_REGIONAL_LENGTH_FIGSIZE,
+                                 get_dataset_markers, scatter_points, legend_handles, add_legend_above, spearman_ci,
+                                 linear_fit_ci_band, format_p)
 
 LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'S1', 'S2']
 
@@ -51,6 +55,9 @@ WHOLE_SPINE = 'whole-spine'
 
 # Markers slightly larger than the shared default (three panels side by side)
 PANEL_MARKER_SIZE = 1.6 * MARKER_SIZE
+
+# Step (in the plotted unit, cm) of the marks drawn in the bottom row, where the sorting variable reaches each multiple
+SORT_MARK_STEP = {'body_height_cm': 10, 'cervical_length_mm': 1, 'L1_L5_span_mm': 0.5}
 
 # Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit)
 PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1),
@@ -97,6 +104,69 @@ def format_axis(ax, xlabel, ylabel=True):
     ax.spines['top'].set_visible(False)
 
 
+def draw_sort_marks(ax, values, step):
+    """
+    Draw a short vertical line at the bottom of the plot where the sorting variable of the (sorted) subjects reaches each
+    multiple of `step`, labelled with that value (e.g. '160 cm'), as in ../lumbar-combined/combine_lumbar_lengths.py.
+    The line is placed just before the first subject reaching that value; the label is drawn to its right.
+    :param ax: matplotlib axes
+    :param values: sorting variable (cm) of the subjects in x-axis order (ascending), subject i at x = i + 1
+    :param step: step in cm (e.g. 10 for the height)
+    """
+    values = np.asarray(values, dtype=float)
+    transform = ax.get_xaxis_transform()  # x in data coordinates, y in axes coordinates
+    first_mark = np.ceil(values.min() / step) * step
+    for mark in np.arange(first_mark, values.max() + step / 2, step):
+        idx = np.argmax(values >= mark - 1e-9)  # first subject reaching this value (values are sorted)
+        if values[idx] < mark - 1e-9:
+            continue
+        x_mark = idx + 1 - 0.5
+        ax.plot([x_mark, x_mark], [0, 0.06], transform=transform, color='dimgray', linewidth=1, zorder=2,
+                clip_on=False)
+        ax.annotate(f'{mark:g} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
+                    textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 5, color='dimgray')
+
+
+def generate_length_figure(df_all, dataset_markers, path_fig):
+    """
+    Cord length (PMJ to conus) per subject, all subjects (females and males together, both datasets pooled) sorted by
+    the cord length (ascending). Sex is shown by color, the dataset by marker (same layout as the cervical and lumbar
+    length figures).
+    :param df_all: dataframe with 'dataset', 'participant_id', 'sex' and 'cord_length_mm' columns
+    :param dataset_markers: marker per dataset
+    :param path_fig: output folder
+    """
+    df = df_all.dropna(subset=['cord_length_mm']).sort_values(['cord_length_mm', 'participant_id'])
+    df = df.reset_index(drop=True)
+    x = np.arange(1, len(df) + 1)
+    y = df['cord_length_mm'].to_numpy(dtype=float) / 10   # mm -> cm
+
+    fig, ax = plt.subplots(figsize=SPINAL_REGIONAL_LENGTH_FIGSIZE)
+    for dataset, marker in dataset_markers.items():
+        for sex in SEX_ORDER:
+            mask = ((df['dataset'] == dataset) & (df['sex'] == sex)).to_numpy()
+            if mask.any():
+                scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=marker)
+
+    ax.set_xticks([])   # subject IDs not shown
+    ax.set_xlim(0.5, len(df) + 0.5)
+    ax.set_xlabel('Subjects sorted by cord length', fontsize=FONT_SIZE)
+    ax.set_ylim(0, 60)
+    ax.set_ylabel('Cord length PMJ to conus [cm]', fontsize=FONT_SIZE)
+    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
+    ax.grid(axis='y', alpha=0.2)
+    ax.set_axisbelow(True)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    add_legend_above(ax, legend_handles(df, dataset_markers), ncol=3)
+    plt.tight_layout()
+
+    fname_png = os.path.join(path_fig, 'cord_length_per_subject_sorted_by_length.png')
+    fig.savefig(fname_png, dpi=300)
+    print(f'Saved {fname_png}')
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Compare the spinal cord length with body height and lumbosacral '
                                                  'spinal level lengths.')
@@ -138,9 +208,10 @@ def main():
     df_all['sex'] = df_all['sex'].str.upper()   # 'f'/'m' -> 'F'/'M' (keys of SEX_COLOR)
     dataset_markers = get_dataset_markers(df_all['dataset'].unique())
 
-    # Correlations and figure: cord length vs body height, cervical length and lumbar length
-    # Same y-axis (cord length) in all panels
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5.3), sharey=True)
+    # Correlations and figure: cord length vs body height, cervical length and lumbar length (top row) and the cord
+    # length per subject sorted by the same variables (bottom row); same y-axis (cord length) in all panels
+    fig, axes_grid = plt.subplots(2, 3, figsize=(16, 9.5), sharey=True)
+    axes = axes_grid[0]
     for ax, letter, (title, datasets, col, xlabel, scale) in zip(axes, 'ABC', PANELS):
         # Panel letter in the upper left corner, outside the axes (closer to the axes for the panels without y-axis
         # label)
@@ -174,9 +245,32 @@ def main():
         ax.set_title(title, fontsize=FONT_SIZE)
         format_axis(ax, xlabel, ylabel=(letter == 'A'))
 
-    # Headroom above the data for the correlation text in the upper left corner
+    # Bottom row: cord length per subject, subjects sorted by the variable on the x-axis of the panel above
+    for ax, letter, (title, datasets, col, xlabel, scale) in zip(axes_grid[1], 'DEF', PANELS):
+        ax.text(-0.15 if letter == 'D' else -0.05, 1.03, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4,
+                fontweight='bold', va='bottom', ha='left')
+        data = df_all[df_all['dataset'].isin(datasets)].dropna(subset=[col, 'cord_length_mm'])
+        data = data.assign(sort_value=data[col].astype(float) / scale)
+        data = data.sort_values(['sort_value', 'cord_length_mm']).reset_index(drop=True)
+        x = np.arange(1, len(data) + 1)
+        y = data['cord_length_mm'].to_numpy(dtype=float) / 10   # mm -> cm
+        for dataset in datasets:
+            for sex in SEX_ORDER:
+                mask = ((data['dataset'] == dataset) & (data['sex'] == sex)).to_numpy()
+                if mask.any():
+                    scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=dataset_markers[dataset],
+                                   white_edge=True, size=PANEL_MARKER_SIZE)
+        draw_sort_marks(ax, data['sort_value'], SORT_MARK_STEP[col])
+        sort_label = xlabel.split(' [')[0]
+        format_axis(ax, f'Subjects sorted by {sort_label[0].lower()}{sort_label[1:]}', ylabel=(letter == 'D'))
+        ax.set_xticks([])   # subject IDs not shown
+        ax.set_xlim(0.5, len(data) + 0.5)
+        ax.grid(axis='x', visible=False)
+
+    # Headroom above the data for the correlation text in the upper left corner and below the data for the marks in
+    # the bottom row
     y_min, y_max = axes[0].get_ylim()
-    axes[0].set_ylim(y_min, y_max + 0.12 * (y_max - y_min))
+    axes[0].set_ylim(y_min - 0.08 * (y_max - y_min), y_max + 0.12 * (y_max - y_min))
     axes[0].yaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))
 
     # Shared legend below the panels: sex (rectangles), datasets (markers) and the linear fit, with the number of
@@ -184,13 +278,16 @@ def main():
     handles = legend_handles(df_all, dataset_markers)
     handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
     fig.legend(handles=handles, loc='lower center', ncol=len(handles), frameon=False, fontsize=FONT_SIZE - 2,
-               bbox_to_anchor=(0.5, -0.02), handletextpad=0.3, columnspacing=1.5)
-    plt.tight_layout(rect=(0, 0.06, 1, 1), w_pad=0.5)
+               bbox_to_anchor=(0.5, 0.0), handletextpad=0.3, columnspacing=1.5)
+    plt.tight_layout(rect=(0, 0.04, 1, 1), w_pad=0.5, h_pad=1.5)
     path_fig = os.path.abspath(args.o) if args.o else path_out
     os.makedirs(path_fig, exist_ok=True)
     fname_png = os.path.join(path_fig, 'cord_length_comparison.png')
     plt.savefig(fname_png, dpi=300)
     print(f'Saved {fname_png}')
+
+    # Cord length per subject, sorted by the cord length
+    generate_length_figure(df_all, dataset_markers, path_fig)
 
 
 if __name__ == '__main__':
