@@ -52,13 +52,11 @@ WHOLE_SPINE = 'whole-spine'
 # Markers slightly larger than the shared default (three panels side by side)
 PANEL_MARKER_SIZE = 1.6 * MARKER_SIZE
 
-# Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit, position of
-# the n and Spearman correlation text inside the panel: 'top' or 'bottom' left corner)
-PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1, 'top'),
+# Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit)
+PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1),
           ('Total Length × Cervical Length', [WHOLE_SPINE], 'cervical_length_mm', 'Cervical length (C2 to C8) [cm]',
-           10, 'top'),
-          ('Total Length × Lumbar Length', [LOCALIZER], 'L1_L5_span_mm', 'Lumbar length (L1 to L5) [cm]', 10,
-           'bottom')]
+           10),
+          ('Total Length × Lumbar Length', [LOCALIZER], 'L1_L5_span_mm', 'Lumbar length (L1 to L5) [cm]', 10)]
 
 def load_excel(fname):
     """
@@ -143,7 +141,7 @@ def main():
     # Correlations and figure: cord length vs body height, cervical length and lumbar length
     # Same y-axis (cord length) in all panels
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.3), sharey=True)
-    for ax, letter, (title, datasets, col, xlabel, scale, text_pos) in zip(axes, 'ABC', PANELS):
+    for ax, letter, (title, datasets, col, xlabel, scale) in zip(axes, 'ABC', PANELS):
         # Panel letter in the upper left corner, outside the axes (closer to the axes for the panels without y-axis
         # label)
         ax.text(-0.15 if letter == 'A' else -0.05, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
@@ -168,11 +166,11 @@ def main():
                     scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=dataset_markers[dataset],
                                    white_edge=True, size=PANEL_MARKER_SIZE)
 
-        # Number of subjects and Spearman correlation inside the panel (sex, datasets and the linear fit are in the
-        # shared legend below the panels)
-        ax.text(0.03, 0.97 if text_pos == 'top' else 0.03,
+        # Number of subjects and Spearman correlation in the upper left corner of the panel (sex, datasets and the
+        # linear fit are in the shared legend below the panels)
+        ax.text(0.03, 0.97,
                 f'n = {len(data)}\nSpearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], {format_p(p)}',
-                transform=ax.transAxes, fontsize=FONT_SIZE - 4, va='top' if text_pos == 'top' else 'bottom')
+                transform=ax.transAxes, fontsize=FONT_SIZE - 4, va='top')
         ax.set_title(title, fontsize=FONT_SIZE)
         format_axis(ax, xlabel, ylabel=(letter == 'A'))
 
