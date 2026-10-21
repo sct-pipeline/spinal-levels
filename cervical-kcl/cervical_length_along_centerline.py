@@ -69,8 +69,8 @@ OUTPUT_DIR = os.path.join(DATA_DIR, 'results_and_figures')
 FONT_SIZE = 14
 
 # Female and male colors
-SEX_STYLE = {'F': {'color': '#2a78d6', 'label': 'Female'},
-             'M': {'color': '#eb6834', 'label': 'Male'}}
+SEX_STYLE = {'F': {'color': '#d62728', 'label': 'Female'},
+             'M': {'color': '#2a78d6', 'label': 'Male'}}
 
 # Subject prefix: when the two sessions (ses-A and ses-B) were acquired, and the marker
 RETEST = {'sub-HFSPAIN': {'label': 'same day', 'marker': 'o'},
@@ -191,7 +191,7 @@ def add_sex_age(df, fname_csv):
 def generate_figure(df, dir_out):
     """
     Plot the length per subject (ses-A and ses-B connected by a line, colored by sex; subjects sorted by the mean
-    length within each sex) and the test-retest agreement (ses-A vs ses-B). The subjects with both sessions on the
+    length) and the test-retest agreement (ses-A vs ses-B). The subjects with both sessions on the
     same day (sub-HFSPAIN*, circles) and on separate days (sub-SPAIN*, squares) are shown with different markers and
     the test-retest statistics are computed separately for them.
     :param df: dataframe with 'subject', 'session', 'sex' and the length columns
@@ -200,7 +200,7 @@ def generate_figure(df, dir_out):
     col = f'{METRIC_NAME}_mm'
     df_wide = df.pivot_table(index=['subject', 'sex'], columns='session', values=col).reset_index()
     df_wide['mean'] = df_wide[['ses-A', 'ses-B']].mean(axis=1)
-    df_wide = df_wide.sort_values(['sex', 'mean']).reset_index(drop=True)
+    df_wide = df_wide.sort_values('mean').reset_index(drop=True)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 5.5), gridspec_kw={'width_ratios': [2.5, 1.2]})
 
@@ -227,9 +227,8 @@ def generate_figure(df, dir_out):
     ax1.legend(handles=handles, loc='lower right', ncol=3, frameon=False, fontsize=FONT_SIZE - 4)
     ax1.set_xlim(0.5, len(df_wide) + 0.5)
     ax1.set_ylim(0, 13)
-    ax1.set_xlabel(f'Subject (n = {len(df_wide)}), sorted by sex and C{FIRST_LEVEL}–C{LAST_LEVEL} length', fontsize=FONT_SIZE)
+    ax1.set_xlabel(f'Subject (n = {len(df_wide)}), sorted by C{FIRST_LEVEL}–C{LAST_LEVEL} length', fontsize=FONT_SIZE)
     ax1.set_ylabel(f'{METRIC_LABEL} [cm]', fontsize=FONT_SIZE)
-    ax1.set_title(f'{METRIC_LABEL} along the centerline', fontsize=FONT_SIZE)
 
     # B: test-retest; same colors and markers as in A, statistics separately for the sessions on the same day and on
     # separate days
@@ -254,7 +253,6 @@ def generate_figure(df, dir_out):
     ax2.set_xlim(lims)
     ax2.set_ylim(lims)
     ax2.set_aspect('equal')
-    ax2.set_title(f'Test-retest (n = {len(df_both)})', fontsize=FONT_SIZE)
     ax2.text(0.03, 0.97, 'Spearman correlation\n' + '\n'.join(stats_text), transform=ax2.transAxes, va='top',
              fontsize=FONT_SIZE - 5)
     ax2.set_xlabel('ses-A [cm]', fontsize=FONT_SIZE)
