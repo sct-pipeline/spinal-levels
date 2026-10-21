@@ -25,7 +25,7 @@ SEX_COLOR = {'F': '#d62728', 'M': '#2a78d6', 'unknown': 'gray'}
 
 # Other names of the same dataset used by some scripts (e.g. the folder name used by default as the dataset name)
 # -> name in DATASET_MARKERS, e.g. {'data-multi-subject': 'EPFL'}
-DATASET_ALIASES = {}
+DATASET_ALIASES = {'Balgrist localizer': 'Balgrist'}
 
 # Marker sizes (scatter `s`); line-only markers (asterisk) are drawn larger and thicker to match filled markers
 MARKER_SIZE = 20
