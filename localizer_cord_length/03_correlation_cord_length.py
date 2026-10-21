@@ -52,13 +52,13 @@ WHOLE_SPINE = 'whole-spine'
 # Markers slightly larger than the shared default (three panels side by side)
 PANEL_MARKER_SIZE = 1.6 * MARKER_SIZE
 
-# Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit, location of
-# the legend inside the panel)
-PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1, 'upper left'),
+# Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit, position of
+# the n and Spearman correlation text inside the panel: 'top' or 'bottom' left corner)
+PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1, 'top'),
           ('Total Length × Cervical Length', [WHOLE_SPINE], 'cervical_length_mm', 'Cervical length (C2 to C8) [cm]',
-           10, 'upper left'),
+           10, 'top'),
           ('Total Length × Lumbar Length', [LOCALIZER], 'L1_L5_span_mm', 'Lumbar length (L1 to L5) [cm]', 10,
-           'lower left')]
+           'bottom')]
 
 def load_excel(fname):
     """
@@ -143,9 +143,10 @@ def main():
     # Correlations and figure: cord length vs body height, cervical length and lumbar length
     # Same y-axis (cord length) in all panels
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.3), sharey=True)
-    for ax, letter, (title, datasets, col, xlabel, scale, legend_loc) in zip(axes, 'ABC', PANELS):
-        # Panel letter in the upper left corner, outside the axes
-        ax.text(-0.15, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
+    for ax, letter, (title, datasets, col, xlabel, scale, text_pos) in zip(axes, 'ABC', PANELS):
+        # Panel letter in the upper left corner, outside the axes (closer to the axes for the panels without y-axis
+        # label)
+        ax.text(-0.15 if letter == 'A' else -0.05, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
                 va='bottom', ha='left')
         data = df_all[df_all['dataset'].isin(datasets)].dropna(subset=[col, 'cord_length_mm'])
         x, y = data[col].astype(float) / scale, data['cord_length_mm'].astype(float) / 10   # mm -> cm
@@ -167,24 +168,26 @@ def main():
                     scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=dataset_markers[dataset],
                                    white_edge=True, size=PANEL_MARKER_SIZE)
 
-        # Legend inside the panel: number of subjects and Spearman correlation (title), sex and datasets with the
-        # number of subjects in this panel, and the linear fit
-        handles = legend_handles(data, {d: dataset_markers[d] for d in datasets})
-        handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
-        legend = ax.legend(handles=handles, loc=legend_loc, ncol=2, frameon=False, fontsize=FONT_SIZE - 4,
-                           title=f'n = {len(data)}\nSpearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], '
-                                 f'{format_p(p)}',
-                           title_fontsize=FONT_SIZE - 4, handlelength=1.5, handletextpad=0.4, columnspacing=1.0,
-                           borderaxespad=0.3)
-        legend._legend_box.align = 'left'
+        # Number of subjects and Spearman correlation inside the panel (sex, datasets and the linear fit are in the
+        # shared legend below the panels)
+        ax.text(0.03, 0.97 if text_pos == 'top' else 0.03,
+                f'n = {len(data)}\nSpearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], {format_p(p)}',
+                transform=ax.transAxes, fontsize=FONT_SIZE - 4, va='top' if text_pos == 'top' else 'bottom')
         ax.set_title(title, fontsize=FONT_SIZE)
         format_axis(ax, xlabel, ylabel=(letter == 'A'))
 
-    # Headroom above the data for the legends in the upper left corner
+    # Headroom above the data for the correlation text in the upper left corner
     y_min, y_max = axes[0].get_ylim()
-    axes[0].set_ylim(y_min, y_max + 0.3 * (y_max - y_min))
+    axes[0].set_ylim(y_min, y_max + 0.12 * (y_max - y_min))
     axes[0].yaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))
-    plt.tight_layout(w_pad=3)
+
+    # Shared legend below the panels: sex (rectangles), datasets (markers) and the linear fit, with the number of
+    # subjects across the figure
+    handles = legend_handles(df_all, dataset_markers)
+    handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
+    fig.legend(handles=handles, loc='lower center', ncol=len(handles), frameon=False, fontsize=FONT_SIZE - 2,
+               bbox_to_anchor=(0.5, -0.02), handletextpad=0.3, columnspacing=1.5)
+    plt.tight_layout(rect=(0, 0.06, 1, 1), w_pad=0.5)
     path_fig = os.path.abspath(args.o) if args.o else path_out
     os.makedirs(path_fig, exist_ok=True)
     fname_png = os.path.join(path_fig, 'cord_length_comparison.png')
