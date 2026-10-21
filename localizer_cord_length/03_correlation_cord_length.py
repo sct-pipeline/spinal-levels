@@ -34,12 +34,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import MaxNLocator
 from scipy import stats
 
 # Shared plotting conditions and correlation helpers (visualisation_utils.py in the repo root)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from visualisation_utils import (FONT_SIZE, SEX_ORDER, SEX_COLOR, FIT_COLOR, FIT_LINEWIDTH, FIT_BAND_COLOR,  # noqa: E402
-                                 FIT_BAND_ALPHA, FIT_LEGEND_LABEL, get_dataset_markers, scatter_points,
+                                 FIT_BAND_ALPHA, FIT_LEGEND_LABEL, MARKER_SIZE, get_dataset_markers, scatter_points,
                                  legend_handles, spearman_ci, linear_fit_ci_band, format_p)
 
 LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'S1', 'S2']
@@ -48,10 +49,16 @@ LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'S1', 'S2']
 LOCALIZER = 'Balgrist localizer'
 WHOLE_SPINE = 'whole-spine'
 
-# Figure panels: (datasets, column, x-axis label, divisor to convert the column to the plotted unit)
-PANELS = [([LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1),
-          ([WHOLE_SPINE], 'cervical_length_mm', 'Cervical length (C2 to C8) [cm]', 10),
-          ([LOCALIZER], 'L1_L5_span_mm', 'Lumbar length (L1 to L5) [cm]', 10)]
+# Markers slightly larger than the shared default (three panels side by side)
+PANEL_MARKER_SIZE = 1.6 * MARKER_SIZE
+
+# Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit, location of
+# the legend inside the panel)
+PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1, 'upper left'),
+          ('Total Length × Cervical Length', [WHOLE_SPINE], 'cervical_length_mm', 'Cervical length (C2 to C8) [cm]',
+           10, 'upper left'),
+          ('Total Length × Lumbar Length', [LOCALIZER], 'L1_L5_span_mm', 'Lumbar length (L1 to L5) [cm]', 10,
+           'lower left')]
 
 def load_excel(fname):
     """
@@ -78,12 +85,13 @@ def load_excel(fname):
     return demographics.merge(spans, on='participant_id', how='left')
 
 
-def format_axis(ax, xlabel):
+def format_axis(ax, xlabel, ylabel=True):
     """
-    Axis labels, grid and spines shared by all panels.
+    Axis labels, grid and spines shared by all panels; the y-axis label only if `ylabel` (first panel, shared y-axis).
     """
     ax.set_xlabel(xlabel, fontsize=FONT_SIZE)
-    ax.set_ylabel('Cord length PMJ to conus [cm]', fontsize=FONT_SIZE)
+    if ylabel:
+        ax.set_ylabel('Cord length PMJ to conus [cm]', fontsize=FONT_SIZE)
     ax.tick_params(axis='both', labelsize=FONT_SIZE - 2)
     ax.grid(alpha=0.2)
     ax.set_axisbelow(True)
@@ -133,8 +141,9 @@ def main():
     dataset_markers = get_dataset_markers(df_all['dataset'].unique())
 
     # Correlations and figure: cord length vs body height, cervical length and lumbar length
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5.3))
-    for ax, letter, (datasets, col, xlabel, scale) in zip(axes, 'ABC', PANELS):
+    # Same y-axis (cord length) in all panels
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5.3), sharey=True)
+    for ax, letter, (title, datasets, col, xlabel, scale, legend_loc) in zip(axes, 'ABC', PANELS):
         # Panel letter in the upper left corner, outside the axes
         ax.text(-0.15, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
                 va='bottom', ha='left')
@@ -156,20 +165,26 @@ def main():
                 mask = ((data['dataset'] == dataset) & (data['sex'] == sex)).to_numpy()
                 if mask.any():
                     scatter_points(ax, x[mask], y[mask], color=SEX_COLOR[sex], marker=dataset_markers[dataset],
-                                   white_edge=True)
+                                   white_edge=True, size=PANEL_MARKER_SIZE)
 
-        n_f, n_m = (data['sex'] == 'F').sum(), (data['sex'] == 'M').sum()
-        ax.set_title(f'Spearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], {format_p(p)}\n'
-                     f'n = {len(data)} (F {n_f}, M {n_m})', fontsize=FONT_SIZE - 3)
-        format_axis(ax, xlabel)
+        # Legend inside the panel: number of subjects and Spearman correlation (title), sex and datasets with the
+        # number of subjects in this panel, and the linear fit
+        handles = legend_handles(data, {d: dataset_markers[d] for d in datasets})
+        handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
+        legend = ax.legend(handles=handles, loc=legend_loc, ncol=2, frameon=False, fontsize=FONT_SIZE - 4,
+                           title=f'n = {len(data)}\nSpearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], '
+                                 f'{format_p(p)}',
+                           title_fontsize=FONT_SIZE - 4, handlelength=1.5, handletextpad=0.4, columnspacing=1.0,
+                           borderaxespad=0.3)
+        legend._legend_box.align = 'left'
+        ax.set_title(title, fontsize=FONT_SIZE)
+        format_axis(ax, xlabel, ylabel=(letter == 'A'))
 
-    # Shared legend below the panels: sex (rectangles), datasets (markers), linear fit with its CI, with the number of
-    # participants across the figure
-    handles = legend_handles(df_all, dataset_markers)
-    handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
-    fig.legend(handles=handles, loc='lower center', ncol=len(handles), frameon=False, fontsize=FONT_SIZE - 2,
-               bbox_to_anchor=(0.5, -0.02), handletextpad=0.3, columnspacing=1.5)
-    plt.tight_layout(rect=(0, 0.06, 1, 1), w_pad=3)
+    # Headroom above the data for the legends in the upper left corner
+    y_min, y_max = axes[0].get_ylim()
+    axes[0].set_ylim(y_min, y_max + 0.3 * (y_max - y_min))
+    axes[0].yaxis.set_major_locator(MaxNLocator(integer=True, steps=[1, 2, 5, 10]))
+    plt.tight_layout(w_pad=3)
     path_fig = os.path.abspath(args.o) if args.o else path_out
     os.makedirs(path_fig, exist_ok=True)
     fname_png = os.path.join(path_fig, 'cord_length_comparison.png')
