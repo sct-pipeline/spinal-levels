@@ -14,6 +14,7 @@ DATASET_MARKERS = {
     'EPFL': '^',                 # Dataset 4: triangle
     'Fudan': 'D',                 # Dataset 5: diamond
     'KCL': 'v',                   # Dataset 6: inverted triangle
+    'NeuroRestore': 'p',          # Dataset 7: pentagon
 }
 
 FONT_SIZE = 14
