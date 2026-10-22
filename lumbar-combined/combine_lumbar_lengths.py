@@ -157,14 +157,14 @@ def generate_length_figure(df, dir_out, sort_by='height', height_step=10):
     ax.set_xticks([])   # subject IDs not shown
     ax.set_xlim(0.5, len(df) + 0.5)
     ax.set_xlabel(f'Subjects sorted by {sort_label}', fontsize=FONT_SIZE)
-    ax.set_ylim(0, 12)
+    ax.set_ylim(0, 8)
     ax.set_ylabel(YLABEL, fontsize=FONT_SIZE)
     ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    add_legend_above(ax, legend_handles(df, dataset_markers), ncol=3)
+    add_legend_above(ax, legend_handles(df, dataset_markers))   # one row
     plt.tight_layout()
 
     sort_part = 'height' if sort_by == 'height' else 'lumbar_length'
