@@ -33,6 +33,8 @@ MARKER_SIZE = 20
 UNFILLED_MARKER_SIZE_FACTOR = 1.6
 UNFILLED_LINEWIDTH = 1.2
 LEGEND_MARKER_SIZE = 7
+# Filled markers that look smaller than the others at the same `s` are drawn larger in the plots (not in the legend)
+MARKER_SIZE_FACTOR = {'p': 1.6}   # pentagon (NeuroRestore)
 # Color of the dataset markers in the legend (dataset is shown by marker only)
 LEGEND_DATASET_COLOR = 'dimgray'
 
@@ -72,6 +74,7 @@ def scatter_points(ax, x, y, color, marker, white_edge=False, size=MARKER_SIZE, 
     since a white edge would make a line-only marker invisible.
     """
     if MarkerStyle(marker).is_filled():
+        size = size * MARKER_SIZE_FACTOR.get(marker, 1) if isinstance(marker, str) else size
         kwargs = dict(edgecolors='white', linewidths=0.5) if white_edge else {}
         return ax.scatter(x, y, color=color, marker=marker, s=size, zorder=zorder, **kwargs)
     return ax.scatter(x, y, color=color, marker=marker, s=size * UNFILLED_MARKER_SIZE_FACTOR,
