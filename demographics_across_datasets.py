@@ -5,6 +5,7 @@ lumbar) and pooled across datasets.
 Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source of sex and age:
     - spine-generic (cervical):  participants.tsv of data-multi-subject
     - whole-spine (cervical):    participants.tsv of whole-spine (ds005616)
+    - kcl (cervical):            participants.csv of the King's College London (KCL) dataset
     - Balgrist (lumbar):         spreadsheet with the spinal level heights (age at ses-03)
     - EPFL (lumbar):             participants.tsv of the EPFL lumbar dataset
     - Fudan (lumbar):            L1-L5_lengths.xlsx
@@ -30,6 +31,7 @@ REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
 SPINE_GENERIC_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/data-multi-subject/participants.tsv')
 WHOLE_SPINE_TSV = os.path.expanduser('~/data/data.neuro.polymtl.ca/whole-spine/participants.tsv')
+KCL_CSV = os.path.join(DATA_DIR, 'cervical_kcl', 'participants.csv')
 BALGRIST_XLSX = os.path.join(DATA_DIR, 'lumbar_Balgrist', 'bids',
                              'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
 EPFL_TSV = os.path.join(DATA_DIR, 'lumbar_epfl', 'participants.tsv')
@@ -40,6 +42,7 @@ OUTPUT_DIR = os.path.join(DATA_DIR, 'figures_across_datasets')
 DATASET_YML = {
     'spine-generic': 'spine-generic-multi-subject',
     'whole-spine': 'whole-spine-ds005616',
+    'kcl': 'cervical-kcl',
     'Balgrist': 'lumbar-balgrist',
     'EPFL': 'lumbar-epfl',
     'Fudan': 'lumbar-fudan',
@@ -47,7 +50,7 @@ DATASET_YML = {
 
 # Region: datasets
 REGION_DATASETS = {
-    'Cervical': ['spine-generic', 'whole-spine'],
+    'Cervical': ['spine-generic', 'whole-spine', 'kcl'],
     'Lumbar': ['Balgrist', 'EPFL', 'Fudan'],
 }
 
@@ -62,6 +65,13 @@ def load_participants_tsv(fname):
     """participant_id, sex and age from a BIDS participants.tsv file."""
     df = pd.read_csv(fname, sep='\t', na_values='n/a')
     return df.rename(columns={'participant_id': 'subject'})[['subject', 'sex', 'age']]
+
+
+def load_kcl(fname):
+    """Sex ('female'/'male' -> 'F'/'M') and age from the KCL participants.csv file."""
+    df = pd.read_csv(fname, encoding='utf-8-sig').rename(columns={'id': 'subject'})
+    df['sex'] = df['sex'].str.strip().str.upper().str[0]
+    return df[['subject', 'sex', 'age']]
 
 
 def load_balgrist(fname):
@@ -132,7 +142,7 @@ def format_row(row):
 
 def print_sentence(rows):
     """
-    Print the datasets description (n, females, age mean ± SD) to copy into an abstract; the trailing numbers are the
+    Print the datasets description (n, females, age mean ± SD) and the pooled total to copy into an abstract; the trailing numbers are the
     reference numbers. Missing age is shown as XXXX.
     """
     def describe(dataset):
@@ -141,10 +151,15 @@ def print_sentence(rows):
         return f"n={row['n']}, {row['n_female']} females, {age} y.o."
 
     print(f"\nThe following datasets were used: cervical open-access spine-generic multi-subject "
-          f"({describe('spine-generic')}),7 whole-spine open-access dataset ({describe('whole-spine')}),8 lumbar "
-          f"dataset from Balgrist University Hospital, Switzerland ({describe('Balgrist')}), an open-access lumbar "
-          f"dataset EPFL, Switzerland ({describe('EPFL')}),9 and an open-access lumbar from Fudan University, China "
-          f"({describe('Fudan')}).10")
+          f"({describe('spine-generic')}),8 whole-spine open-access dataset ({describe('whole-spine')}),9 cervical "
+          f"dataset from King's College London, UK ({describe('kcl')}), lumbar dataset from Balgrist University "
+          f"Hospital, Switzerland ({describe('Balgrist')}), an open-access lumbar dataset EPFL, Switzerland "
+          f"({describe('EPFL')}),10 and an open-access lumbar from Fudan University, China ({describe('Fudan')}).6")
+
+    pooled = next(r for r in rows if r['dataset'] == 'Pooled')
+    print(f"\nIn total, {pooled['n']} subjects were included ({pooled['n_female']} females, "
+          f"{pooled['age_mean']:.1f} ± {pooled['age_sd']:.1f} y.o.; range: {pooled['age_min']:g}–"
+          f"{pooled['age_max']:g} y.o.).")
 
 
 def main():
@@ -157,6 +172,7 @@ def main():
     df = pd.concat([
         load_dataset('spine-generic', load_participants_tsv(SPINE_GENERIC_TSV)),
         load_dataset('whole-spine', load_participants_tsv(WHOLE_SPINE_TSV)),
+        load_dataset('kcl', load_kcl(KCL_CSV)),
         load_dataset('Balgrist', load_balgrist(BALGRIST_XLSX)),
         load_dataset('EPFL', load_participants_tsv(EPFL_TSV)),
         load_dataset('Fudan', load_fudan(FUDAN_XLSX)),

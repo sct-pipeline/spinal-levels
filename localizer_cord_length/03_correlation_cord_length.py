@@ -38,8 +38,8 @@ LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'S1', 'S2']
 FONT_SIZE = 14
 
 # Female and male colors (same as in ../06_correlation_lumbar_length_height.py); markers distinguish the datasets
-SEX_STYLE = {'f': {'color': '#2a78d6', 'label': 'Female'},
-             'm': {'color': '#eb6834', 'label': 'Male'}}
+SEX_STYLE = {'f': {'color': '#d62728', 'label': 'Female'},
+             'm': {'color': '#2a78d6', 'label': 'Male'}}
 DATASET_STYLE = {'localizer': {'marker': 'o', 'size': 50, 'label': 'Balgrist localizer'},
                  'whole-spine': {'marker': '^', 'size': 70, 'label': 'Whole-spine'}}
 
