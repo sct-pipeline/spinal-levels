@@ -9,6 +9,9 @@ Datasets (subjects listed in <dataset>/subjects-to-analyse.yml) and the source o
     - Balgrist (lumbar):         spreadsheet with the spinal level heights (age at ses-03)
     - EPFL (lumbar):             participants.tsv of the EPFL lumbar dataset
     - Fudan (lumbar):            L1-L5_lengths.xlsx
+    - NeuroRestore (lumbar):     Internal_NeuroRestore_dataset.tsv (private, only the measurements are shared; no
+                                 subjects-to-analyse.yml, the healthy subjects are used as in
+                                 lumbar-combined/combine_lumbar_lengths.py)
 
 Output (saved to the -o folder):
     - demographics_per_subject.csv: dataset, subject, sex and age of all subjects
@@ -36,9 +39,10 @@ BALGRIST_XLSX = os.path.join(DATA_DIR, 'lumbar_Balgrist', 'bids',
                              'spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx')
 EPFL_TSV = os.path.join(DATA_DIR, 'lumbar_epfl', 'participants.tsv')
 FUDAN_XLSX = os.path.join(DATA_DIR, 'lumbar_fudan', 'L1-L5_lengths.xlsx')
+NEURORESTORE_TSV = os.path.join(DATA_DIR, 'lumbar_neurorestore', 'Internal_NeuroRestore_dataset.tsv')
 OUTPUT_DIR = os.path.join(DATA_DIR, 'figures_across_datasets')
 
-# Dataset name: folder (in this repo) with the subjects-to-analyse.yml file
+# Dataset name: folder (in this repo) with the subjects-to-analyse.yml file (None: all subjects returned by the loader)
 DATASET_YML = {
     'spine-generic': 'spine-generic-multi-subject',
     'whole-spine': 'whole-spine-ds005616',
@@ -46,12 +50,13 @@ DATASET_YML = {
     'Balgrist': 'lumbar-balgrist',
     'EPFL': 'lumbar-epfl',
     'Fudan': 'lumbar-fudan',
+    'NeuroRestore': None,
 }
 
 # Region: datasets
 REGION_DATASETS = {
     'Cervical': ['spine-generic', 'whole-spine', 'kcl'],
-    'Lumbar': ['Balgrist', 'EPFL', 'Fudan'],
+    'Lumbar': ['Balgrist', 'EPFL', 'Fudan', 'NeuroRestore'],
 }
 
 
@@ -87,12 +92,19 @@ def load_fudan(fname):
     return pd.read_excel(fname)[['subject', 'sex', 'age']]
 
 
+def load_neurorestore(fname):
+    """Sex and age of the healthy subjects (patients excluded) from the NeuroRestore TSV file."""
+    df = pd.read_csv(fname, sep='\t')
+    df = df[df['affection'] == 'HEALTHY']
+    return df.rename(columns={'sub-id': 'subject', 'sex [F/M]': 'sex'})[['subject', 'sex', 'age']]
+
+
 def load_dataset(dataset, df_participants):
     """
-    Keep only the subjects listed in the dataset's subjects-to-analyse.yml.
+    Keep only the subjects listed in the dataset's subjects-to-analyse.yml (all subjects if the dataset has none).
     :return: dataframe with 'dataset', 'subject', 'sex' and 'age' columns
     """
-    subjects = read_subjects(dataset)
+    subjects = read_subjects(dataset) if DATASET_YML[dataset] else df_participants['subject'].tolist()
     missing = sorted(set(subjects) - set(df_participants['subject']))
     if missing:
         print(f'WARNING: {dataset}: {len(missing)} subjects without sex and age: {missing}')
@@ -145,19 +157,22 @@ def print_sentence(rows):
     Print the datasets description (n, females, age mean ± SD) and the pooled total to copy into an abstract; the trailing numbers are the
     reference numbers. Missing age is shown as XXXX.
     """
-    def describe(dataset):
+    def describe(dataset, sessions=''):
         row = next(r for r in rows if r['dataset'] == dataset)
         age = f"{row['age_mean']:.1f} ± {row['age_sd']:.1f}" if row['n_with_age'] else 'XXXX'
-        return f"n={row['n']}, {row['n_female']} females, {age} y.o."
+        return f"n={row['n']}, {sessions}{row['n_female']} females, {age} y.o."
 
     print(f"\nThe following datasets were used: cervical open-access spine-generic multi-subject "
-          f"({describe('spine-generic')}),8 whole-spine open-access dataset ({describe('whole-spine')}),9 cervical "
-          f"dataset from King's College London, UK ({describe('kcl')}), lumbar dataset from Balgrist University "
-          f"Hospital, Switzerland ({describe('Balgrist')}), an open-access lumbar dataset EPFL, Switzerland "
-          f"({describe('EPFL')}),10 and an open-access lumbar from Fudan University, China ({describe('Fudan')}).6")
+          f"({describe('spine-generic')}),9 whole-spine open-access dataset ({describe('whole-spine')}),10 cervical "
+          f"dataset from King's College London (KCL), UK ({describe('kcl', 'two sessions [test-retest], ')}),11,12 "
+          f"lumbar dataset from Balgrist University Hospital, Switzerland ({describe('Balgrist')}), an open-access "
+          f"lumbar dataset EPFL, Switzerland ({describe('EPFL')}),13 lumbar dataset from NeuroRestore "
+          f"({describe('NeuroRestore')}), and an open-access lumbar dataset from Fudan University, China "
+          f"({describe('Fudan')}).6")
 
     pooled = next(r for r in rows if r['dataset'] == 'Pooled')
-    print(f"\nIn total, {pooled['n']} subjects were included ({pooled['n_female']} females, "
+    n_datasets = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][len(DATASET_YML)]
+    print(f"\nIn total, {pooled['n']} subjects across {n_datasets} datasets were included ({pooled['n_female']} females, "
           f"{pooled['age_mean']:.1f} ± {pooled['age_sd']:.1f} y.o.; range: {pooled['age_min']:g}–"
           f"{pooled['age_max']:g} y.o.).")
 
@@ -176,6 +191,7 @@ def main():
         load_dataset('Balgrist', load_balgrist(BALGRIST_XLSX)),
         load_dataset('EPFL', load_participants_tsv(EPFL_TSV)),
         load_dataset('Fudan', load_fudan(FUDAN_XLSX)),
+        load_dataset('NeuroRestore', load_neurorestore(NEURORESTORE_TSV)),
     ], ignore_index=True)
 
     fname_subjects = os.path.join(dir_out, 'demographics_per_subject.csv')

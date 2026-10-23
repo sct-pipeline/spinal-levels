@@ -14,6 +14,7 @@ DATASET_MARKERS = {
     'EPFL': '^',                 # Dataset 4: triangle
     'Fudan': 'D',                 # Dataset 5: diamond
     'KCL': 'v',                   # Dataset 6: inverted triangle
+    'NeuroRestore': 'p',          # Dataset 7: pentagon
 }
 
 FONT_SIZE = 14
@@ -32,6 +33,8 @@ MARKER_SIZE = 20
 UNFILLED_MARKER_SIZE_FACTOR = 1.6
 UNFILLED_LINEWIDTH = 1.2
 LEGEND_MARKER_SIZE = 7
+# Filled markers that look smaller than the others at the same `s` are drawn larger in the plots (not in the legend)
+MARKER_SIZE_FACTOR = {'p': 1.6}   # pentagon (NeuroRestore)
 # Color of the dataset markers in the legend (dataset is shown by marker only)
 LEGEND_DATASET_COLOR = 'dimgray'
 
@@ -71,6 +74,7 @@ def scatter_points(ax, x, y, color, marker, white_edge=False, size=MARKER_SIZE, 
     since a white edge would make a line-only marker invisible.
     """
     if MarkerStyle(marker).is_filled():
+        size = size * MARKER_SIZE_FACTOR.get(marker, 1) if isinstance(marker, str) else size
         kwargs = dict(edgecolors='white', linewidths=0.5) if white_edge else {}
         return ax.scatter(x, y, color=color, marker=marker, s=size, zorder=zorder, **kwargs)
     return ax.scatter(x, y, color=color, marker=marker, s=size * UNFILLED_MARKER_SIZE_FACTOR,
@@ -190,8 +194,19 @@ def plot_correlation(df, x_col, y_col, xlabel, ylabel, fname_figure, sex_col='se
 
     # Shared legend above the plot: sex (rectangles), datasets (markers), linear fit with its CI
     handles = legend_handles(df, dataset_markers, sex_col=sex_col, dataset_col=dataset_col)
-    handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
-    add_legend_above(ax, handles, ncol=CORRELATION_LEGEND_NCOL)
+    fit_handle = Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL)
+    ncol = CORRELATION_LEGEND_NCOL
+    if len(handles) + 1 <= 2 * ncol:
+        handles.append(fit_handle)
+    else:
+        # Sex and datasets on the first two rows, the linear fit alone on the third row (the legend is filled column
+        # by column, so each column gets two entries followed by the fit or an invisible placeholder)
+        ncol = int(np.ceil(len(handles) / 2))
+        blank = Patch(alpha=0, label=' ')
+        columns = [handles[2 * c:2 * c + 2] for c in range(ncol)]
+        handles = [h for c, column in enumerate(columns)
+                   for h in column + [blank] * (2 - len(column)) + [fit_handle if c == 0 else blank]]
+    add_legend_above(ax, handles, ncol=ncol)
 
     plt.tight_layout()
     fig.savefig(fname_figure, dpi=300)
