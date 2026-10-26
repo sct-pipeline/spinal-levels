@@ -27,6 +27,7 @@ Figure layout:
   vertical lines at the bottom mark where the height reaches each 10 cm (labelled "150 cm", "160 cm", ...;
   `-height-step` changes the step, 0 disables them)
 - one point per row of the tables, i.e. per subject/session for final tables with several sessions
+- panel letter "A" in the top-left corner, for combining figures into one panel (`-panel-letter`; "none" disables it)
 
 Example:
     python plot_cervical_distance.py \
@@ -147,6 +148,9 @@ def get_parser():
                              'by height).')
     parser.add_argument('-marker-edge-width', type=float, default=0.8,
                         help='Width (points) of the white border around the markers; 0 disables it. Default: 0.8')
+    parser.add_argument('-panel-letter', default='A',
+                        help='Panel letter drawn in the top-left corner of the figure (e.g. "A", "B"); "none" '
+                             'disables it. Default: A')
     parser.add_argument('-output-folder', default=None,
                         help='Folder where the figure will be saved. Default: folder of the first input CSV table.')
     parser.add_argument('-figure-name', default=None,
@@ -382,9 +386,21 @@ def style_axes(ax, n_subjects, distance, first_level, last_level, sort_by='heigh
     ax.spines['top'].set_visible(False)
 
 
+def add_panel_letter(fig, letter):
+    """
+    Add a bold panel letter (e.g. 'A') in the top-left corner of the figure, for combining figures into one panel.
+    Call it after plt.tight_layout() so the letter stays at the figure edge.
+    :param fig: matplotlib figure
+    :param letter: panel letter; None or '' disables it
+    """
+    if not letter:
+        return
+    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=FONT_SIZE + 4, fontweight='bold')
+
+
 def generate_distance_figure(df_distance, fname_figure, distance, first_level=FIRST_LEVEL, last_level=LAST_LEVEL,
                              height_col=HEIGHT_COL, show=True, sort_by='height', marker_edge_width=0.8,
-                             stratify_by_sex=False, height_step=10):
+                             stratify_by_sex=False, height_step=10, panel_letter='A'):
     """
     Generate a figure with subjects on the x-axis (all sorted together by height or by length, see `sort_by`; or
     females first, then males, with `stratify_by_sex`) and the distance between the `first_level` and `last_level` on
@@ -401,6 +417,7 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
     :param marker_edge_width: width of the white border around the markers (points); 0 disables it
     :param stratify_by_sex: sort females and males in separate groups, separated by a dashed line
     :param height_step: step (cm) of the height marks drawn when sorted by height; 0 disables them
+    :param panel_letter: panel letter drawn in the top-left corner (e.g. 'A'); None or '' disables it
     """
     dist_col = DISTANCE_COL[distance]
     # Fixed marker per dataset name (independent of which datasets are included and of their order)
@@ -431,6 +448,8 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
     add_legend_above(ax, legend_handles(df_plot, dataset_markers, sex_col='sex_key'))
 
     plt.tight_layout()
+    # Panel letter in the top-left corner (after tight_layout so it stays at the figure edge)
+    add_panel_letter(fig, panel_letter)
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     if show:
@@ -512,9 +531,10 @@ def main():
     else:
         fname_figure = os.path.join(out_dir, default_figure_name(df, distance, args.sort_by, args.stratify_by_sex))
     print(f'Subjects sorted by {args.sort_by}{" within each sex group" if args.stratify_by_sex else ""}.')
+    panel_letter = None if args.panel_letter.strip().lower() in ('', 'none') else args.panel_letter
     generate_distance_figure(df, fname_figure, distance, show=not args.no_show, sort_by=args.sort_by,
                              marker_edge_width=args.marker_edge_width, stratify_by_sex=args.stratify_by_sex,
-                             height_step=args.height_step)
+                             height_step=args.height_step, panel_letter=panel_letter)
 
 
 if __name__ == '__main__':

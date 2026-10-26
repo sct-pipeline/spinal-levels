@@ -9,6 +9,8 @@ and compares the PMJ-to-conus length between males and females.
 
 The correlation figures use the shared plotting conditions of visualisation_utils.py (plot_correlation): font, sex
 colors, fixed marker per dataset name, marker sizes, linear fit with its 95% CI band, Spearman text and legend.
+The C2-C8 distance vs height figure gets a panel letter in its top-left corner (`-panel-letter`, default "A";
+"none" disables it), for combining it with other figures into one panel.
 
 Input:
 - One or more CSV tables with the C2-C8 distance per subject (`-i`), combined into one analysis, e.g. the per-dataset
@@ -399,11 +401,15 @@ def main():
                              'correlated with height and with the C2-C8 distance.')
     parser.add_argument('-conus-col', default=None,
                         help='Name of the distance column in the -pmj-to-conus files. Default: detected automatically.')
+    parser.add_argument('-panel-letter', default='A',
+                        help='Panel letter drawn in the top-left corner of the C2-C8 distance vs height figure (e.g. '
+                             '"A", "B"); "none" disables it. Default: A')
     parser.add_argument('-output-folder', default=os.getcwd() + "/figures-and-dataframes",
                         help='Path to the output folder where the figure will be saved. '
                              'Default: current working directory.')
     args = parser.parse_args()
     os.makedirs(args.output_folder, exist_ok=True)
+    panel_letter = None if args.panel_letter.strip().lower() in ('', 'none') else args.panel_letter
 
     # Pair each table with its participants.tsv (or None)
     fnames = [os.path.abspath(os.path.expanduser(fname)) for fname in args.i]
@@ -512,10 +518,11 @@ def main():
             continue
         correlation_analysis(df_an, x_col, y_col, title,
                              [ds for ds in datasets if (df_an['dataset'] == ds).any()])
-        # Panel letter 'A' for the C2-C8 distance vs height figure (combined with the lumbar length figure, 'B')
+        # Panel letter (-panel-letter, default 'A') for the C2-C8 distance vs height figure (combined with the lumbar
+        # length figure, 'B'); the PMJ-to-conus figures get none
         plot_correlation(df_an, x_col, y_col, xlabel, ylabel, os.path.join(args.output_folder, fname_fig),
                          integer_xticks=(x_col == HEIGHT_COL),
-                         panel_letter='A' if (x_col, y_col) == (HEIGHT_COL, C2C8_COL) else None)
+                         panel_letter=panel_letter if (x_col, y_col) == (HEIGHT_COL, C2C8_COL) else None)
 
     # Male vs female comparison (Mann-Whitney U test), all subjects pooled and per dataset. Height is compared as well
     # because a sex difference in the lengths may simply reflect the height difference between males and females.
