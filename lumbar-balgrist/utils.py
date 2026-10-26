@@ -125,3 +125,50 @@ def generate_figure(df, dir_out, metric):
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     plt.show()
+
+
+def correlation_scatter(df, x_col, y_col, x_label, y_label, title, fname_out):
+    """
+    Scatter plot of y_col vs x_col, colored by sex, with a least-squares linear fit (visual guide) and its
+    95% confidence band. The Spearman correlation (rho, 95% CI, p and n) is printed above the plot and the sex
+    legend below the plot, both outside the axes. Used by correlation_cord_length.py.
+    :param df: dataframe with x_col, y_col and a 'sex' column ('F'/'M')
+    :return: dict with the Spearman rho, p, 95% CI and n
+    """
+    d = df.dropna(subset=[x_col, y_col]).copy()
+    x = d[x_col].to_numpy(float)
+    y = d[y_col].to_numpy(float)
+    n = len(d)
+
+    rho, p = stats.spearmanr(x, y)
+    rho_lo, rho_hi = spearman_ci(rho, n)
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    for sex, style in SEX_STYLE.items():
+        mask = (d['sex'] == sex).to_numpy()
+        ax.scatter(x[mask], y[mask], color=style['color'], marker=style['marker'], s=60, zorder=3,
+                   label=f"{style['label']} (n = {mask.sum()})")
+
+    x_fit = np.linspace(x.min(), x.max(), 100)
+    y_fit, y_lo, y_hi = linear_fit_ci_band(x, y, x_fit)
+    ax.fill_between(x_fit, y_lo, y_hi, color='gray', alpha=0.2, linewidth=0, zorder=1)
+    ax.plot(x_fit, y_fit, color='black', linestyle='--', linewidth=2, zorder=2)
+
+    ax.set_xlabel(x_label, fontsize=FONT_SIZE)
+    ax.set_ylabel(y_label, fontsize=FONT_SIZE)
+    ax.tick_params(axis='both', labelsize=FONT_SIZE - 2)
+    ax.grid(alpha=0.2)
+    ax.set_axisbelow(True)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+
+    ax.set_title(title, fontsize=FONT_SIZE + 1, pad=34)
+    ax.text(0.5, 1.015, f'Spearman ρ = {rho:.2f} [95% CI {rho_lo:.2f}, {rho_hi:.2f}], p = {p:.3f}    n = {n}',
+            transform=ax.transAxes, ha='center', va='bottom', fontsize=FONT_SIZE - 2)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=FONT_SIZE - 2)
+
+    fig.subplots_adjust(top=0.86, bottom=0.17)
+    fig.savefig(fname_out, dpi=300, bbox_inches='tight')
+    print(f'Figure saved to {fname_out}')
+    plt.close(fig)
+    return {'rho': rho, 'p': p, 'ci': (rho_lo, rho_hi), 'n': n}
