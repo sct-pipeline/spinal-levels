@@ -512,8 +512,10 @@ def main():
             continue
         correlation_analysis(df_an, x_col, y_col, title,
                              [ds for ds in datasets if (df_an['dataset'] == ds).any()])
+        # Panel letter 'A' for the C2-C8 distance vs height figure (combined with the lumbar length figure, 'B')
         plot_correlation(df_an, x_col, y_col, xlabel, ylabel, os.path.join(args.output_folder, fname_fig),
-                         integer_xticks=(x_col == HEIGHT_COL))
+                         integer_xticks=(x_col == HEIGHT_COL),
+                         panel_letter='A' if (x_col, y_col) == (HEIGHT_COL, C2C8_COL) else None)
 
     # Male vs female comparison (Mann-Whitney U test), all subjects pooled and per dataset. Height is compared as well
     # because a sex difference in the lengths may simply reflect the height difference between males and females.
