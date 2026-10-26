@@ -4,6 +4,7 @@ from matplotlib.lines import Line2D
 from matplotlib.markers import MarkerStyle
 from matplotlib.patches import Patch
 from matplotlib.ticker import MaxNLocator
+from matplotlib.transforms import ScaledTranslation
 from scipy import stats
 
 SPINAL_REGIONAL_LENGTH_FIGSIZE = (12, 6)
@@ -21,6 +22,11 @@ FONT_SIZE = 14
 # Font of all figures
 FONT_FAMILY = 'Arial'
 plt.rcParams['font.family'] = FONT_FAMILY
+
+# Panel letters (A, B, ...): bold, at a fixed offset (points) from the top of the figure, so that the letters of
+# different figures are at the same place when the figures are combined
+PANEL_LETTER_SIZE = FONT_SIZE + 4
+PANEL_LETTER_OFFSET = 8
 
 # Sex: order on the x-axis, labels and colors
 SEX_ORDER = ['F', 'M', 'unknown']
@@ -109,6 +115,23 @@ def add_legend_above(ax, handles, ncol=None):
               borderaxespad=0.2)
 
 
+def panel_letter_top_margin(fig):
+    """Fraction of the figure height reserved at the top for the panel letters (`rect` top of tight_layout)."""
+    return (2 * PANEL_LETTER_OFFSET + PANEL_LETTER_SIZE) / 72 / fig.get_figheight()
+
+
+def add_panel_letter(fig, letter, x=0.0):
+    """
+    Panel letter at the top of the figure, PANEL_LETTER_OFFSET points below the top edge and to the right of `x`.
+    :param fig: matplotlib figure
+    :param letter: panel letter, e.g. 'A'
+    :param x: left position in figure coordinates (0 = left edge of the figure)
+    """
+    offset = ScaledTranslation(PANEL_LETTER_OFFSET / 72, -PANEL_LETTER_OFFSET / 72, fig.dpi_scale_trans)
+    fig.text(x, 1, letter, transform=fig.transFigure + offset, fontsize=PANEL_LETTER_SIZE, fontweight='bold',
+             ha='left', va='top')
+
+
 def format_p(p):
     """'p < 0.001' or 'p = 0.xxx'."""
     return 'p < 0.001' if p < 0.001 else f'p = {p:.3f}'
@@ -142,7 +165,7 @@ def linear_fit_ci_band(x, y, x_fit, alpha=0.05):
 
 
 def plot_correlation(df, x_col, y_col, xlabel, ylabel, fname_figure, sex_col='sex', dataset_col='dataset',
-                     integer_xticks=False):
+                     integer_xticks=False, panel_letter=None):
     """
     Shared correlation figure: scatter plot (color = sex, marker = dataset, white edge on filled markers), linear fit
     across all subjects (visual guide) with its 95% confidence band, the Spearman correlation (all subjects pooled)
@@ -156,6 +179,7 @@ def plot_correlation(df, x_col, y_col, xlabel, ylabel, fname_figure, sex_col='se
     :param sex_col: column with 'F' / 'M'
     :param dataset_col: column with the dataset name (key of DATASET_MARKERS or DATASET_ALIASES)
     :param integer_xticks: integer x ticks (e.g. for height in cm)
+    :param panel_letter: panel letter in the upper left corner of the figure (e.g. 'A'); none if None
     :return: fig, ax
     """
     x = df[x_col].astype(float).to_numpy()
@@ -211,7 +235,11 @@ def plot_correlation(df, x_col, y_col, xlabel, ylabel, fname_figure, sex_col='se
                    for h in column + [blank] * (2 - len(column)) + [fit_handle if c == 0 else blank]]
     add_legend_above(ax, handles, ncol=ncol)
 
-    plt.tight_layout()
+    if panel_letter:
+        plt.tight_layout(rect=(0, 0, 1, 1 - panel_letter_top_margin(fig)))
+        add_panel_letter(fig, panel_letter)
+    else:
+        plt.tight_layout()
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     return fig, ax
