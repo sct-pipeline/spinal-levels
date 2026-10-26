@@ -50,8 +50,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.markers import MarkerStyle
 # Shared plotting conditions (font, sex colors, dataset markers, marker sizes, legend), same in all figure scripts
-from visualisation_utils import (SPINAL_REGIONAL_LENGTH_FIGSIZE, FONT_SIZE, SEX_ORDER, SEX_LABEL, SEX_COLOR,
-                                 get_dataset_markers, scatter_points, legend_handles, add_legend_above)
+from visualisation_utils import (SPINAL_REGIONAL_LENGTH_FIGSIZE, LENGTH_FIGURE_FONT_SIZE, SEX_ORDER, SEX_LABEL,
+                                 SEX_COLOR, get_dataset_markers, scatter_points, legend_handles, add_legend_above)
 # Column names and levels shared with the table script
 from compute_cervical_distance import FIRST_LEVEL, LAST_LEVEL, DISTANCE_COL, HEIGHT_COL
 
@@ -327,7 +327,7 @@ def draw_sex_groups(ax, df_ordered):
         first_group = False
         # Group label centered above the group
         ax.text((x_start + x_end) / 2, 0.98, SEX_LABEL[sex_key], color=SEX_COLOR[sex_key],
-                transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=FONT_SIZE - 3)
+                transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=LENGTH_FIGURE_FONT_SIZE - 3)
 
 
 def draw_height_marks(ax, df_ordered, height_col=HEIGHT_COL, step=10, stratify_by_sex=False):
@@ -361,7 +361,7 @@ def draw_height_marks(ax, df_ordered, height_col=HEIGHT_COL, step=10, stratify_b
                     clip_on=False)
             # Label to the right of the line (a few points away), so it never crosses the y-axis
             ax.annotate(f'{mark:.0f} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
-                        textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 3,
+                        textcoords='offset points', ha='left', va='bottom', fontsize=LENGTH_FIGURE_FONT_SIZE - 3,
                         color='dimgray')
 
 
@@ -372,13 +372,13 @@ def style_axes(ax, n_subjects, distance, first_level, last_level, sort_by='heigh
     ax.set_xlim(0.5, n_subjects + 0.5)
     sort_label = 'height' if sort_by == 'height' else f'C{first_level}–C{last_level} length'
     stratified = 'stratified by sex and ' if stratify_by_sex else ''
-    ax.set_xlabel(f'Subjects {stratified}sorted by {sort_label}', fontsize=FONT_SIZE)
+    ax.set_xlabel(f'Subjects {stratified}sorted by {sort_label}', fontsize=LENGTH_FIGURE_FONT_SIZE)
     ax.set_ylim(7, 13)
     if distance == 'total':
-        ax.set_ylabel(f'Length top C{first_level} – bottom C{last_level} [cm]', fontsize=FONT_SIZE)
+        ax.set_ylabel(f'Length top C{first_level} – bottom C{last_level} [cm]', fontsize=LENGTH_FIGURE_FONT_SIZE)
     else:
-        ax.set_ylabel(f'Length midpoint C{first_level} – midpoint C{last_level} [cm]', fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
+        ax.set_ylabel(f'Length midpoint C{first_level} – midpoint C{last_level} [cm]', fontsize=LENGTH_FIGURE_FONT_SIZE)
+    ax.tick_params(axis='y', labelsize=LENGTH_FIGURE_FONT_SIZE - 2)
     ax.set_xticks([])  # no tick marks or numbers on the x-axis
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
@@ -395,7 +395,7 @@ def add_panel_letter(fig, letter):
     """
     if not letter:
         return
-    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=FONT_SIZE + 4, fontweight='bold')
+    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=LENGTH_FIGURE_FONT_SIZE + 4, fontweight='bold')
 
 
 def generate_distance_figure(df_distance, fname_figure, distance, first_level=FIRST_LEVEL, last_level=LAST_LEVEL,
@@ -445,8 +445,12 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
     style_axes(ax, len(df_plot), distance, first_level, last_level, sort_by, stratify_by_sex)
 
     # Shared legend above the plot: sex (color) then datasets (marker), with n
-    add_legend_above(ax, legend_handles(df_plot, dataset_markers, sex_col='sex_key'))
+    add_legend_above(ax, legend_handles(df_plot, dataset_markers, sex_col='sex_key'),
+                     font_size=LENGTH_FIGURE_FONT_SIZE)
 
+    # Twice: in the first pass, the legend (wider than the initial axes) seems to overflow the figure on the left and
+    # the left margin becomes too large; the second pass starts from axes wide enough for the legend
+    plt.tight_layout()
     plt.tight_layout()
     # Panel letter in the top-left corner (after tight_layout so it stays at the figure edge)
     add_panel_letter(fig, panel_letter)
