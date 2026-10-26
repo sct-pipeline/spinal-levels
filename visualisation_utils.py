@@ -18,6 +18,9 @@ DATASET_MARKERS = {
 }
 
 FONT_SIZE = 14
+# Font of all figures
+FONT_FAMILY = 'Arial'
+plt.rcParams['font.family'] = FONT_FAMILY
 
 # Sex: order on the x-axis, labels and colors
 SEX_ORDER = ['F', 'M', 'unknown']
