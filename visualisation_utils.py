@@ -19,6 +19,9 @@ DATASET_MARKERS = {
 }
 
 FONT_SIZE = 14
+# Font size of the per-subject length figures (subjects sorted by height or length), slightly larger than FONT_SIZE as
+# these figures are wider (SPINAL_REGIONAL_LENGTH_FIGSIZE)
+LENGTH_FIGURE_FONT_SIZE = FONT_SIZE + 2
 # Font of all figures
 FONT_FAMILY = 'Arial'
 plt.rcParams['font.family'] = FONT_FAMILY
@@ -108,10 +111,13 @@ def legend_handles(df, dataset_markers, sex_col='sex', dataset_col='dataset'):
     return handles
 
 
-def add_legend_above(ax, handles, ncol=None):
-    """Legend above the plot (upper right), without frame; one row unless `ncol` is given."""
+def add_legend_above(ax, handles, ncol=None, font_size=FONT_SIZE):
+    """
+    Legend above the plot (upper right), without frame; one row unless `ncol` is given. The legend text is 3 points
+    smaller than `font_size` (the font size of the axis labels).
+    """
     ax.legend(handles=handles, loc='lower right', bbox_to_anchor=(1.0, 1.0), ncol=ncol or len(handles),
-              frameon=False, fontsize=FONT_SIZE - 3, handlelength=1.2, handletextpad=0.3, columnspacing=1.2,
+              frameon=False, fontsize=font_size - 3, handlelength=1.2, handletextpad=0.3, columnspacing=1.2,
               borderaxespad=0.2)
 
 
