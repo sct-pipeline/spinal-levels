@@ -194,7 +194,8 @@ def generate_correlation_figure(df, dir_out):
 
     df_plot = df.assign(length_cm=df['length_mm'] / 10)  # convert mm to cm
     fname_figure = os.path.join(dir_out, f'figure_correlation_lumbar_length_L1-L5_{datasets_suffix(df)}_height.png')
-    plot_correlation(df_plot, 'height', 'length_cm', 'Height [cm]', YLABEL, fname_figure, integer_xticks=True)
+    plot_correlation(df_plot, 'height', 'length_cm', 'Height [cm]', YLABEL, fname_figure, integer_xticks=True,
+                     panel_letter='B')
 
 
 def print_summary(df):
