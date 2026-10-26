@@ -47,8 +47,8 @@ from scipy import stats
 # Shared plotting conditions and correlation helpers (visualisation_utils.py); adjust if visualisation_utils.py lives
 # elsewhere in the repo
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-from visualisation_utils import (FONT_SIZE, SEX_LABEL, SEX_COLOR, get_dataset_markers, scatter_points,  # noqa: E402
-                                 legend_handles, add_legend_above, plot_correlation, spearman_ci,
+from visualisation_utils import (LENGTH_FIGURE_FONT_SIZE, SEX_LABEL, SEX_COLOR, get_dataset_markers,  # noqa: E402
+                                 scatter_points, legend_handles, add_legend_above, plot_correlation, spearman_ci,
                                  SPINAL_REGIONAL_LENGTH_FIGSIZE)
 
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
@@ -119,7 +119,8 @@ def draw_height_marks(ax, heights, step=10):
         ax.plot([x_mark, x_mark], [0, 0.06], transform=transform, color='dimgray', linewidth=1, zorder=2,
                 clip_on=False)
         ax.annotate(f'{mark:.0f} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
-                    textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 3, color='dimgray')
+                    textcoords='offset points', ha='left', va='bottom', fontsize=LENGTH_FIGURE_FONT_SIZE - 3,
+                    color='dimgray')
 
 
 def datasets_suffix(df):
@@ -137,7 +138,7 @@ def add_panel_letter(fig, letter):
     """
     if not letter:
         return
-    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=FONT_SIZE + 4, fontweight='bold')
+    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=LENGTH_FIGURE_FONT_SIZE + 4, fontweight='bold')
 
 
 def generate_length_figure(df, dir_out, sort_by='height', height_step=10, panel_letter='B'):
@@ -171,15 +172,18 @@ def generate_length_figure(df, dir_out, sort_by='height', height_step=10, panel_
     sort_label = 'height' if sort_by == 'height' else 'L1–L5 length'
     ax.set_xticks([])   # subject IDs not shown
     ax.set_xlim(0.5, len(df) + 0.5)
-    ax.set_xlabel(f'Subjects sorted by {sort_label}', fontsize=FONT_SIZE)
+    ax.set_xlabel(f'Subjects sorted by {sort_label}', fontsize=LENGTH_FIGURE_FONT_SIZE)
     ax.set_ylim(0, 8)
-    ax.set_ylabel(YLABEL, fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
+    ax.set_ylabel(YLABEL, fontsize=LENGTH_FIGURE_FONT_SIZE)
+    ax.tick_params(axis='y', labelsize=LENGTH_FIGURE_FONT_SIZE - 2)
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    add_legend_above(ax, legend_handles(df, dataset_markers))   # one row
+    add_legend_above(ax, legend_handles(df, dataset_markers), font_size=LENGTH_FIGURE_FONT_SIZE)   # one row
+    # Twice: in the first pass, the legend (wider than the initial axes) seems to overflow the figure on the left and
+    # the left margin becomes too large; the second pass starts from axes wide enough for the legend
+    plt.tight_layout()
     plt.tight_layout()
     # Panel letter in the top-left corner (after tight_layout so it stays at the figure edge)
     add_panel_letter(fig, panel_letter)
