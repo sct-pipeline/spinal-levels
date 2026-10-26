@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from visualisation_utils import (FONT_SIZE, SEX_ORDER, SEX_COLOR, FIT_COLOR, FIT_LINEWIDTH, FIT_BAND_COLOR,  # noqa: E402
                                  FIT_BAND_ALPHA, FIT_LEGEND_LABEL, MARKER_SIZE, SPINAL_REGIONAL_LENGTH_FIGSIZE,
                                  get_dataset_markers, scatter_points, legend_handles, add_legend_above, spearman_ci,
-                                 linear_fit_ci_band, format_p)
+                                 linear_fit_ci_band, format_p, add_panel_letter, panel_letter_top_margin)
 
 LEVELS = ['L1', 'L2', 'L3', 'L4', 'L5', 'S1', 'S2']
 
@@ -54,6 +54,9 @@ WHOLE_SPINE = 'whole-spine'
 
 # Markers slightly larger than the shared default (three panels side by side)
 PANEL_MARKER_SIZE = 1.6 * MARKER_SIZE
+
+# Panel letters (C to E; A and B are the cervical and lumbar length vs height figures, combined with this one)
+PANEL_LETTERS = 'CDE'
 
 # Figure panels: (title, datasets, column, x-axis label, divisor to convert the column to the plotted unit)
 PANELS = [('Total Length × Height', [LOCALIZER, WHOLE_SPINE], 'body_height_cm', 'Height [cm]', 1),
@@ -184,11 +187,7 @@ def main():
     # Correlations and figure: cord length vs body height, cervical length and lumbar length; same y-axis (cord length)
     # in all panels
     fig, axes = plt.subplots(1, 3, figsize=(16, 5.5), sharey=True)
-    for ax, letter, (title, datasets, col, xlabel, scale) in zip(axes, 'ABC', PANELS):
-        # Panel letter in the upper left corner, outside the axes (closer to the axes for the panels without y-axis
-        # label)
-        ax.text(-0.15 if letter == 'A' else -0.05, 1.1, letter, transform=ax.transAxes, fontsize=FONT_SIZE + 4, fontweight='bold',
-                va='bottom', ha='left')
+    for ax, (title, datasets, col, xlabel, scale) in zip(axes, PANELS):
         data = df_all[df_all['dataset'].isin(datasets)].dropna(subset=[col, 'cord_length_mm'])
         x, y = data[col].astype(float) / scale, data['cord_length_mm'].astype(float) / 10   # mm -> cm
         rho, p = stats.spearmanr(x, y)
@@ -215,7 +214,7 @@ def main():
                 f'n = {len(data)}\nSpearman ρ = {rho:+.2f} [95% CI {rho_lo:+.2f}, {rho_hi:+.2f}], {format_p(p)}',
                 transform=ax.transAxes, fontsize=FONT_SIZE - 4, va='top')
         ax.set_title(title, fontsize=FONT_SIZE)
-        format_axis(ax, xlabel, ylabel=(letter == 'A'))
+        format_axis(ax, xlabel, ylabel=(ax is axes[0]))
 
     # Headroom above the data for the correlation text in the upper left corner
     y_min, y_max = axes[0].get_ylim()
@@ -228,7 +227,11 @@ def main():
     handles.append(Line2D([], [], color=FIT_COLOR, linewidth=FIT_LINEWIDTH, label=FIT_LEGEND_LABEL))
     fig.legend(handles=handles, loc='lower center', ncol=len(handles), frameon=False, fontsize=FONT_SIZE - 2,
                bbox_to_anchor=(0.5, 0.0), handletextpad=0.3, columnspacing=1.5)
-    plt.tight_layout(rect=(0, 0.07, 1, 1), w_pad=0.5)
+    plt.tight_layout(rect=(0, 0.07, 1, 1 - panel_letter_top_margin(fig)), w_pad=0.5)
+    # Panel letters at the top of the figure: the first one in the upper left corner of the figure (same place as in
+    # the cervical and lumbar correlation figures, panels A and B), the others above the left edge of their panel
+    for ax, letter in zip(axes, PANEL_LETTERS):
+        add_panel_letter(fig, letter, x=0 if ax is axes[0] else ax.get_position().x0 - 0.02)
     path_fig = os.path.abspath(args.o) if args.o else path_out
     os.makedirs(path_fig, exist_ok=True)
     fname_png = os.path.join(path_fig, 'cord_length_comparison.png')
