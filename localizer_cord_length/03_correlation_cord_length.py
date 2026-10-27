@@ -95,7 +95,7 @@ def format_axis(ax, xlabel, ylabel=True):
     """
     ax.set_xlabel(xlabel, fontsize=FONT_SIZE)
     if ylabel:
-        ax.set_ylabel('Cord length PMJ to conus [cm]', fontsize=FONT_SIZE)
+        ax.set_ylabel('Cord length PMJ to Conus tip [cm]', fontsize=FONT_SIZE)
     ax.tick_params(axis='both', labelsize=FONT_SIZE - 2)
     ax.grid(alpha=0.2)
     ax.set_axisbelow(True)
@@ -128,7 +128,7 @@ def generate_length_figure(df_all, dataset_markers, path_fig):
     ax.set_xlim(0.5, len(df) + 0.5)
     ax.set_xlabel('Subjects sorted by cord length', fontsize=FONT_SIZE)
     ax.set_ylim(0, 60)
-    ax.set_ylabel('Cord length PMJ to conus [cm]', fontsize=FONT_SIZE)
+    ax.set_ylabel('Cord length PMJ to Conus tip [cm]', fontsize=FONT_SIZE)
     ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
