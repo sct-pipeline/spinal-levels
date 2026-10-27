@@ -27,6 +27,7 @@ Figure layout:
   vertical lines at the bottom mark where the height reaches each 10 cm (labelled "150 cm", "160 cm", ...;
   `-height-step` changes the step, 0 disables them)
 - one point per row of the tables, i.e. per subject/session for final tables with several sessions
+- panel letter "A" in the top-left corner, for combining figures into one panel (`-panel-letter`; "none" disables it)
 
 Example:
     python plot_cervical_distance.py \
@@ -49,8 +50,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.markers import MarkerStyle
 # Shared plotting conditions (font, sex colors, dataset markers, marker sizes, legend), same in all figure scripts
-from visualisation_utils import (SPINAL_REGIONAL_LENGTH_FIGSIZE, FONT_SIZE, SEX_ORDER, SEX_LABEL, SEX_COLOR,
-                                 get_dataset_markers, scatter_points, legend_handles, add_legend_above)
+from visualisation_utils import (SPINAL_REGIONAL_LENGTH_FIGSIZE, LENGTH_FIGURE_FONT_SIZE, SEX_ORDER, SEX_LABEL,
+                                 SEX_COLOR, get_dataset_markers, scatter_points, legend_handles, add_legend_above)
 # Column names and levels shared with the table script
 from compute_cervical_distance import FIRST_LEVEL, LAST_LEVEL, DISTANCE_COL, HEIGHT_COL
 
@@ -147,6 +148,9 @@ def get_parser():
                              'by height).')
     parser.add_argument('-marker-edge-width', type=float, default=0.8,
                         help='Width (points) of the white border around the markers; 0 disables it. Default: 0.8')
+    parser.add_argument('-panel-letter', default='A',
+                        help='Panel letter drawn in the top-left corner of the figure (e.g. "A", "B"); "none" '
+                             'disables it. Default: A')
     parser.add_argument('-output-folder', default=None,
                         help='Folder where the figure will be saved. Default: folder of the first input CSV table.')
     parser.add_argument('-figure-name', default=None,
@@ -323,7 +327,7 @@ def draw_sex_groups(ax, df_ordered):
         first_group = False
         # Group label centered above the group
         ax.text((x_start + x_end) / 2, 0.98, SEX_LABEL[sex_key], color=SEX_COLOR[sex_key],
-                transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=FONT_SIZE - 3)
+                transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=LENGTH_FIGURE_FONT_SIZE - 3)
 
 
 def draw_height_marks(ax, df_ordered, height_col=HEIGHT_COL, step=10, stratify_by_sex=False):
@@ -357,7 +361,7 @@ def draw_height_marks(ax, df_ordered, height_col=HEIGHT_COL, step=10, stratify_b
                     clip_on=False)
             # Label to the right of the line (a few points away), so it never crosses the y-axis
             ax.annotate(f'{mark:.0f} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
-                        textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 3,
+                        textcoords='offset points', ha='left', va='bottom', fontsize=LENGTH_FIGURE_FONT_SIZE - 3,
                         color='dimgray')
 
 
@@ -368,13 +372,13 @@ def style_axes(ax, n_subjects, distance, first_level, last_level, sort_by='heigh
     ax.set_xlim(0.5, n_subjects + 0.5)
     sort_label = 'height' if sort_by == 'height' else f'C{first_level}–C{last_level} length'
     stratified = 'stratified by sex and ' if stratify_by_sex else ''
-    ax.set_xlabel(f'Subjects {stratified}sorted by {sort_label}', fontsize=FONT_SIZE)
+    ax.set_xlabel(f'Subjects {stratified}sorted by {sort_label}', fontsize=LENGTH_FIGURE_FONT_SIZE)
     ax.set_ylim(7, 13)
     if distance == 'total':
-        ax.set_ylabel(f'Length top C{first_level} – bottom C{last_level} [cm]', fontsize=FONT_SIZE)
+        ax.set_ylabel(f'Length top C{first_level} – bottom C{last_level} [cm]', fontsize=LENGTH_FIGURE_FONT_SIZE)
     else:
-        ax.set_ylabel(f'Length midpoint C{first_level} – midpoint C{last_level} [cm]', fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
+        ax.set_ylabel(f'Length midpoint C{first_level} – midpoint C{last_level} [cm]', fontsize=LENGTH_FIGURE_FONT_SIZE)
+    ax.tick_params(axis='y', labelsize=LENGTH_FIGURE_FONT_SIZE - 2)
     ax.set_xticks([])  # no tick marks or numbers on the x-axis
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
@@ -382,9 +386,21 @@ def style_axes(ax, n_subjects, distance, first_level, last_level, sort_by='heigh
     ax.spines['top'].set_visible(False)
 
 
+def add_panel_letter(fig, letter):
+    """
+    Add a bold panel letter (e.g. 'A') in the top-left corner of the figure, for combining figures into one panel.
+    Call it after plt.tight_layout() so the letter stays at the figure edge.
+    :param fig: matplotlib figure
+    :param letter: panel letter; None or '' disables it
+    """
+    if not letter:
+        return
+    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=LENGTH_FIGURE_FONT_SIZE + 4, fontweight='bold')
+
+
 def generate_distance_figure(df_distance, fname_figure, distance, first_level=FIRST_LEVEL, last_level=LAST_LEVEL,
                              height_col=HEIGHT_COL, show=True, sort_by='height', marker_edge_width=0.8,
-                             stratify_by_sex=False, height_step=10):
+                             stratify_by_sex=False, height_step=10, panel_letter='A'):
     """
     Generate a figure with subjects on the x-axis (all sorted together by height or by length, see `sort_by`; or
     females first, then males, with `stratify_by_sex`) and the distance between the `first_level` and `last_level` on
@@ -401,6 +417,7 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
     :param marker_edge_width: width of the white border around the markers (points); 0 disables it
     :param stratify_by_sex: sort females and males in separate groups, separated by a dashed line
     :param height_step: step (cm) of the height marks drawn when sorted by height; 0 disables them
+    :param panel_letter: panel letter drawn in the top-left corner (e.g. 'A'); None or '' disables it
     """
     dist_col = DISTANCE_COL[distance]
     # Fixed marker per dataset name (independent of which datasets are included and of their order)
@@ -428,9 +445,15 @@ def generate_distance_figure(df_distance, fname_figure, distance, first_level=FI
     style_axes(ax, len(df_plot), distance, first_level, last_level, sort_by, stratify_by_sex)
 
     # Shared legend above the plot: sex (color) then datasets (marker), with n
-    add_legend_above(ax, legend_handles(df_plot, dataset_markers, sex_col='sex_key'))
+    add_legend_above(ax, legend_handles(df_plot, dataset_markers, sex_col='sex_key'),
+                     font_size=LENGTH_FIGURE_FONT_SIZE)
 
+    # Twice: in the first pass, the legend (wider than the initial axes) seems to overflow the figure on the left and
+    # the left margin becomes too large; the second pass starts from axes wide enough for the legend
     plt.tight_layout()
+    plt.tight_layout()
+    # Panel letter in the top-left corner (after tight_layout so it stays at the figure edge)
+    add_panel_letter(fig, panel_letter)
     fig.savefig(fname_figure, dpi=300)
     print(f'Figure saved to {fname_figure}')
     if show:
@@ -512,9 +535,10 @@ def main():
     else:
         fname_figure = os.path.join(out_dir, default_figure_name(df, distance, args.sort_by, args.stratify_by_sex))
     print(f'Subjects sorted by {args.sort_by}{" within each sex group" if args.stratify_by_sex else ""}.')
+    panel_letter = None if args.panel_letter.strip().lower() in ('', 'none') else args.panel_letter
     generate_distance_figure(df, fname_figure, distance, show=not args.no_show, sort_by=args.sort_by,
                              marker_edge_width=args.marker_edge_width, stratify_by_sex=args.stratify_by_sex,
-                             height_step=args.height_step)
+                             height_step=args.height_step, panel_letter=panel_letter)
 
 
 if __name__ == '__main__':

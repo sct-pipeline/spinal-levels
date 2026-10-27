@@ -5,7 +5,8 @@ Fudan and NeuroRestore datasets together.
 Figures:
     - length per subject: all subjects (females and males together) sorted by height (`-sort-by height`, default) or
       by the L1-L5 length (`-sort-by length`). When sorted by height, short vertical lines at the bottom mark where the
-      height reaches each 10 cm (labelled "150 cm", "160 cm", ...; `-height-step` changes the step, 0 disables them)
+      height reaches each 10 cm (labelled "150 cm", "160 cm", ...; `-height-step` changes the step, 0 disables them).
+      Panel letter "B" in the top-left corner, for combining figures into one panel (`-panel-letter`; "none" disables it)
     - correlation between the length and subject height (all subjects pooled), with a linear fit (visual guide), its
       95% confidence band, and the Spearman correlation coefficient with its 95% CI
 
@@ -46,8 +47,8 @@ from scipy import stats
 # Shared plotting conditions and correlation helpers (visualisation_utils.py); adjust if visualisation_utils.py lives
 # elsewhere in the repo
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-from visualisation_utils import (FONT_SIZE, SEX_LABEL, SEX_COLOR, get_dataset_markers, scatter_points,  # noqa: E402
-                                 legend_handles, add_legend_above, plot_correlation, spearman_ci,
+from visualisation_utils import (LENGTH_FIGURE_FONT_SIZE, SEX_LABEL, SEX_COLOR, get_dataset_markers,  # noqa: E402
+                                 scatter_points, legend_handles, add_legend_above, plot_correlation, spearman_ci,
                                  SPINAL_REGIONAL_LENGTH_FIGSIZE)
 
 DATA_DIR = os.path.expanduser('~/data/spinal-levels')
@@ -118,7 +119,8 @@ def draw_height_marks(ax, heights, step=10):
         ax.plot([x_mark, x_mark], [0, 0.06], transform=transform, color='dimgray', linewidth=1, zorder=2,
                 clip_on=False)
         ax.annotate(f'{mark:.0f} cm', xy=(x_mark, 0.02), xycoords=transform, xytext=(3, 0),
-                    textcoords='offset points', ha='left', va='bottom', fontsize=FONT_SIZE - 3, color='dimgray')
+                    textcoords='offset points', ha='left', va='bottom', fontsize=LENGTH_FIGURE_FONT_SIZE - 3,
+                    color='dimgray')
 
 
 def datasets_suffix(df):
@@ -126,7 +128,20 @@ def datasets_suffix(df):
     return '_'.join(dataset.lower() for dataset in datasets_in_order(df))
 
 
-def generate_length_figure(df, dir_out, sort_by='height', height_step=10):
+def add_panel_letter(fig, letter):
+    """
+    Add a bold panel letter (e.g. 'B') in the top-left corner of the figure, for combining figures into one panel (same
+    as in ../cervical-combined/plot_cervical_distance.py). Call it after plt.tight_layout() so the letter stays at the
+    figure edge.
+    :param fig: matplotlib figure
+    :param letter: panel letter; None or '' disables it
+    """
+    if not letter:
+        return
+    fig.text(0.01, 0.99, letter, ha='left', va='top', fontsize=LENGTH_FIGURE_FONT_SIZE + 4, fontweight='bold')
+
+
+def generate_length_figure(df, dir_out, sort_by='height', height_step=10, panel_letter='B'):
     """
     Length per subject: all subjects (females and males together) sorted by height or by the L1-L5 length (ascending).
     Sex is shown by color, the dataset by marker. When sorted by height, short vertical lines at the bottom mark where
@@ -135,6 +150,7 @@ def generate_length_figure(df, dir_out, sort_by='height', height_step=10):
     :param dir_out: output folder
     :param sort_by: 'height' or 'length'
     :param height_step: step (cm) of the height marks drawn when sorted by height; 0 disables them
+    :param panel_letter: panel letter drawn in the top-left corner (e.g. 'B'); None or '' disables it
     """
     sort_cols = ['height', 'length_mm', 'subject'] if sort_by == 'height' else ['length_mm', 'height', 'subject']
     df = df.sort_values(sort_cols).reset_index(drop=True)
@@ -156,16 +172,21 @@ def generate_length_figure(df, dir_out, sort_by='height', height_step=10):
     sort_label = 'height' if sort_by == 'height' else 'L1–L5 length'
     ax.set_xticks([])   # subject IDs not shown
     ax.set_xlim(0.5, len(df) + 0.5)
-    ax.set_xlabel(f'Subjects sorted by {sort_label}', fontsize=FONT_SIZE)
+    ax.set_xlabel(f'Subjects sorted by {sort_label}', fontsize=LENGTH_FIGURE_FONT_SIZE)
     ax.set_ylim(0, 8)
-    ax.set_ylabel(YLABEL, fontsize=FONT_SIZE)
-    ax.tick_params(axis='y', labelsize=FONT_SIZE - 2)
+    ax.set_ylabel(YLABEL, fontsize=LENGTH_FIGURE_FONT_SIZE)
+    ax.tick_params(axis='y', labelsize=LENGTH_FIGURE_FONT_SIZE - 2)
     ax.grid(axis='y', alpha=0.2)
     ax.set_axisbelow(True)
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    add_legend_above(ax, legend_handles(df, dataset_markers))   # one row
+    add_legend_above(ax, legend_handles(df, dataset_markers), font_size=LENGTH_FIGURE_FONT_SIZE)   # one row
+    # Twice: in the first pass, the legend (wider than the initial axes) seems to overflow the figure on the left and
+    # the left margin becomes too large; the second pass starts from axes wide enough for the legend
     plt.tight_layout()
+    plt.tight_layout()
+    # Panel letter in the top-left corner (after tight_layout so it stays at the figure edge)
+    add_panel_letter(fig, panel_letter)
 
     sort_part = 'height' if sort_by == 'height' else 'lumbar_length'
     fname_figure = os.path.join(dir_out, f'figure_lumbar_length_L1-L5_{datasets_suffix(df)}_sorted_by_{sort_part}.png')
@@ -194,7 +215,8 @@ def generate_correlation_figure(df, dir_out):
 
     df_plot = df.assign(length_cm=df['length_mm'] / 10)  # convert mm to cm
     fname_figure = os.path.join(dir_out, f'figure_correlation_lumbar_length_L1-L5_{datasets_suffix(df)}_height.png')
-    plot_correlation(df_plot, 'height', 'length_cm', 'Height [cm]', YLABEL, fname_figure, integer_xticks=True)
+    plot_correlation(df_plot, 'height', 'length_cm', 'Height [cm]', YLABEL, fname_figure, integer_xticks=True,
+                     panel_letter='B')
 
 
 def print_summary(df):
@@ -254,6 +276,9 @@ def main():
                         help='When sorted by height, draw a short vertical line with a label (e.g. "150 cm", '
                              '"160 cm") where the height reaches each multiple of this step (cm); 0 disables them. '
                              'Default: 10')
+    parser.add_argument('-panel-letter', default='B',
+                        help='Panel letter drawn in the top-left corner of the length figure (e.g. "A", "B"); "none" '
+                             'disables it. Default: B')
     parser.add_argument('-o', default=OUTPUT_DIR,
                         help=f'Output folder for the CSV file and the figures. Default: {OUTPUT_DIR}')
     args = parser.parse_args()
@@ -279,7 +304,8 @@ def main():
     df.to_csv(fname_csv, index=False)
     print(f'CSV file saved in {fname_csv}.')
 
-    generate_length_figure(df, dir_out, args.sort_by, args.height_step)
+    panel_letter = None if args.panel_letter.strip().lower() in ('', 'none') else args.panel_letter
+    generate_length_figure(df, dir_out, args.sort_by, args.height_step, panel_letter=panel_letter)
     generate_correlation_figure(df, dir_out)
     print_summary(df)
     plt.show()
