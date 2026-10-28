@@ -42,6 +42,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import statsmodels.formula.api as smf
 from scipy import stats
 
 # Shared plotting conditions and correlation helpers (visualisation_utils.py); adjust if visualisation_utils.py lives
@@ -221,7 +222,9 @@ def generate_correlation_figure(df, dir_out):
 
 def print_summary(df):
     """
-    Print a short overview of the L1-L5 length (mean ± SD [range]) to copy into an abstract.
+    Print a short overview of the L1-L5 length (mean ± SD [range]) to copy into an abstract, with the female vs. male
+    height difference (Mann-Whitney U) and the association between the length and height adjusted for sex (OLS model
+    'length_mm ~ sex + height').
     """
     def describe(values, unit='mm'):
         return f'{values.mean():.1f} ± {values.std():.1f} {unit} [{values.min():.1f}–{values.max():.1f}]'
@@ -232,6 +235,13 @@ def print_summary(df):
     rho, p = stats.spearmanr(df['height'], df['length_mm'])
     rho_lo, rho_hi = spearman_ci(rho, len(df))
     datasets = datasets_in_order(df)
+    # Females and males may differ in height, so the sex difference in height and the association between the length
+    # and height adjusted for sex are reported as well
+    height_female, height_male = df.loc[df['sex'] == 'F', 'height'], df.loc[df['sex'] == 'M', 'height']
+    p_height_sex = stats.mannwhitneyu(height_female, height_male).pvalue
+    model = smf.ols('length_mm ~ sex + height', data=df).fit()
+    beta_height, p_height_adj = model.params['height'], model.pvalues['height']
+    beta_lo, beta_hi = model.conf_int().loc['height']
 
     print('\n===== Summary: length top L1 – bottom L5 along the centerline (mean ± SD [range]) =====')
     print(f"All:      n = {len(df)} ({n_female} F / {n_male} M), {describe(df['length_mm'])}")
@@ -242,19 +252,27 @@ def print_summary(df):
     print(f'Male:     n = {n_male}, {describe(male)}')
     print(f'Female vs. male: Mann-Whitney U p = {p_sex:.3f}')
     print(f"Height:   {describe(df['height'], unit='cm')}")
+    print(f"Height female: {describe(height_female, unit='cm')}, male: {describe(height_male, unit='cm')}, "
+          f"Mann-Whitney U p = {p_height_sex:.3g}")
     print(f'Length vs. height: Spearman ρ = {rho:.2f} [95% CI {rho_lo:.2f}, {rho_hi:.2f}], p = {p:.3f}')
+    print(f'Length vs. height adjusted for sex (OLS length_mm ~ sex + height): β = {beta_height:+.2f} mm/cm '
+          f'[95% CI {beta_lo:+.2f}, {beta_hi:+.2f}], p = {p_height_adj:.3f}')
     print('=' * 88)
 
     # The same in a single sentence; the wording depends on the significance (p < 0.05)
     n_dataset = ', '.join(f"{dataset} n = {(df['dataset'] == dataset).sum()}" for dataset in datasets)
     sex_result = 'a significant' if p_sex < 0.05 else 'no significant'
     height_result = 'a significant' if p < 0.05 else 'no significant'
+    taller = 'significantly' if p_height_sex < 0.05 else 'not significantly'
     print(f"\nIn {len(df)} participants ({n_female} F / {n_male} M; {n_dataset}), the spinal cord length from the top "
           f"of L1 to the bottom of L5 measured along the centerline was {df['length_mm'].mean():.1f} ± "
           f"{df['length_mm'].std():.1f} mm (range {df['length_mm'].min():.1f}–{df['length_mm'].max():.1f} mm), "
           f"with {sex_result} difference between females and males ({female.mean():.1f} ± {female.std():.1f} vs. "
-          f"{male.mean():.1f} ± {male.std():.1f} mm, p = {p_sex:.3f}) and {height_result} correlation with body "
-          f"height (Spearman ρ = {rho:.2f}, p = {p:.3f}).")
+          f"{male.mean():.1f} ± {male.std():.1f} mm, p = {p_sex:.3f}), although males were {taller} taller than "
+          f"females ({height_male.mean():.1f} ± {height_male.std():.1f} vs. {height_female.mean():.1f} ± "
+          f"{height_female.std():.1f} cm, p {'< 0.001' if p_height_sex < 0.001 else f'= {p_height_sex:.3f}'}), and "
+          f"{height_result} correlation with body height (Spearman ρ = {rho:.2f}, p = {p:.3f}; adjusted for sex: "
+          f"p = {p_height_adj:.3f}).")
 
 
 def main():
