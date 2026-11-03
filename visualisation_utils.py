@@ -16,6 +16,7 @@ DATASET_MARKERS = {
     'Fudan': 'D',                 # Dataset 5: diamond
     'KCL': 'v',                   # Dataset 6: inverted triangle
     'NeuroRestore': 'p',          # Dataset 7: pentagon
+    'Marseille': 'h',             # Dataset 8: hexagon
 }
 
 FONT_SIZE = 14
@@ -46,7 +47,7 @@ UNFILLED_MARKER_SIZE_FACTOR = 1.6
 UNFILLED_LINEWIDTH = 1.2
 LEGEND_MARKER_SIZE = 7
 # Filled markers that look smaller than the others at the same `s` are drawn larger in the plots (not in the legend)
-MARKER_SIZE_FACTOR = {'p': 1.6}   # pentagon (NeuroRestore)
+MARKER_SIZE_FACTOR = {'p': 1.6, 'h': 1.6}   # pentagon (NeuroRestore), hexagon (Marseille)
 # Color of the dataset markers in the legend (dataset is shown by marker only)
 LEGEND_DATASET_COLOR = 'dimgray'
 
