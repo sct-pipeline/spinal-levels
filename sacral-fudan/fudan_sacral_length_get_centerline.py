@@ -12,7 +12,7 @@ segmentation (typically the conus below the end of the cord mask), the cumulativ
 the distance (mm) is reported in 'get_centerline_extrap_mm' (re-check if > 3 mm).
 
 Input (-i: Fudan dataset root, same layout as fundan_sacral_length.py):
-- derivatives/route_a/sub-*/sub-*_cord_seg.nii.gz
+- derivatives/cord_seg_from_markers/sub-*/sub-*_cord_seg.nii.gz
 - sacral_length/bounds/sub-*/[new/]sub-*_{S1top,conus}.mrk.json   (new/ preferred when present)
 
 Output (-o, default <-i>/sacral_length):
@@ -90,7 +90,7 @@ def main():
 
     root = os.path.abspath(os.path.expanduser(args.i))
     bounds_dir = os.path.join(root, 'sacral_length', 'bounds')
-    cord_dir = os.path.join(root, 'derivatives', 'route_a')
+    cord_dir = os.path.join(root, 'derivatives', 'cord_seg_from_markers')
     out_dir = os.path.abspath(os.path.expanduser(args.o)) if args.o else os.path.join(root, 'sacral_length')
     dir_qc = os.path.join(out_dir, 'centerline')
     os.makedirs(dir_qc, exist_ok=True)

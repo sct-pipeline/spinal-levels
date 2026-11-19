@@ -8,7 +8,7 @@ dataset does not ship a localizer centerline; it ships manual cord contours, so 
 ## Method
 
 1. **Centerline.** Per-axial-slice centroid of the CISS cord segmentation
-   (`derivatives/route_a/sub-*/sub-*_cord_seg.nii.gz`, rasterized from the manual `cord_*` contours); it reaches
+   (`derivatives/cord_seg_from_markers/sub-*/sub-*_cord_seg.nii.gz`, rasterized from the manual `cord_*` contours); it reaches
    the conus.
 2. **Bounds.** Manually placed top-of-S1 and conus points
    (`sacral_length/bounds/sub-*/sub-*_{S1top,conus}.mrk.json`).

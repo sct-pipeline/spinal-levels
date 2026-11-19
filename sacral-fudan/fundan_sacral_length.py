@@ -5,7 +5,7 @@ whole-cord / lumbar centerline metric). The cord curvature is accounted for (arc
 
 Unlike Balgrist, the Fudan dataset does not ship a localizer centerline, so the centerline substrate differs:
 - centerline = per-axial-slice centroid of the CISS cord segmentation
-  (derivatives/route_a/sub-*/sub-*_cord_seg.nii.gz, rasterized from the manual cord_* contours; it reaches the conus);
+  (derivatives/cord_seg_from_markers/sub-*/sub-*_cord_seg.nii.gz, rasterized from the manual cord_* contours; it reaches the conus);
 - bounds     = manually placed S1-top and conus points (sacral_length/bounds/sub-*/sub-*_{S1top,conus}.mrk.json).
 
 The conus of the cord segmentation stops a few mm above the true conus for the larger subjects, so the conus was
@@ -14,7 +14,7 @@ original bounds. This script prefers `new/<file>` when present (falling back to 
 choice in the S1top_source / conus_source columns.
 
 Input (-i: Fudan dataset root):
-- derivatives/route_a/sub-*/sub-*_cord_seg.nii.gz           # cord mask
+- derivatives/cord_seg_from_markers/sub-*/sub-*_cord_seg.nii.gz           # cord mask
 - sacral_length/bounds/sub-*/sub-*_{S1top,conus}.mrk.json   # manual bounds (original)
 - sacral_length/bounds/sub-*/new/sub-*_{S1top,conus}.mrk.json  # corrected bounds (preferred when present)
 - derivatives/L1-L5/L1-L5_lengths.csv                       # sex, height_cm, age, weight_kg
@@ -120,7 +120,7 @@ def main():
 
     root = os.path.abspath(os.path.expanduser(args.i))
     bounds_dir = os.path.join(root, 'sacral_length', 'bounds')
-    cord_dir = os.path.join(root, 'derivatives', 'route_a')
+    cord_dir = os.path.join(root, 'derivatives', 'cord_seg_from_markers')
     demo_csv = os.path.join(root, 'derivatives', 'L1-L5', 'L1-L5_lengths.csv')
     out_dir = os.path.abspath(os.path.expanduser(args.o)) if args.o else os.path.join(root, 'sacral_length')
     os.makedirs(out_dir, exist_ok=True)
