@@ -36,6 +36,32 @@ python correlation_length_height.py -i <out>/sacral_length_S1-conus_centerline.c
 
 If a boundary point is missing for a subject, that boundary is taken from the segmentation (S1) or label 60 (conus).
 
+## Sacral length on the CISS
+
+`sacral_length_ciss.py` measures the same S1-top to conus length directly on the axial CISS (its field of view covers
+the conus), without the localizer:
+
+1. **Centerline.** Fitted to the existing cord segmentation of the CISS (`-seg`, files `<CISS name>_seg.nii.gz`,
+   suffix set by `-seg-suffix`) with SCT's `get_centerline()` (bspline, smooth=30, as in
+   `../lumbar-balgrist/lumbar_length_along_centerline.py`).
+2. **Bounds.** Top of S1 = top edge of the most superior S1 slice of the spinal-level segmentation. Conus, two
+   versions giving two columns:
+   - `length_S1-conus_auto_centerline_mm`: bottom edge of the cord segmentation (purely automatic);
+   - `length_S1-conus_centerline_mm`: conus world-Z read on the CISS (`-conus-csv`, as for the whole-cord length).
+     This is the column read by `correlation_length_height.py` and `../sacral-combined/combine_sacral_lengths.py`.
+3. **Length.** Difference of the cumulative centerline length at the two bounds.
+
+```bash
+conda activate venv_sct
+python sacral_length_ciss.py -seg <cord segs> -dseg <spinal-level segs> -xlsx <bids>/spinal_level_heights_top_L1-bottom_S2_with_chart.xlsx \
+    -conus-csv <tip_conus_CISS_worldZ.csv> -o <out>
+python correlation_length_height.py -i <out>/sacral_length_S1-conus_CISS.csv
+```
+
+QC: check `<out>/centerline/*_centerline.nii.gz` over the CISS and the cord segmentation, and re-check subjects with
+`extrap_mm` > 3 mm or `|conus_csv_vs_seg_mm|` > 3 mm, i.e. where the two lengths disagree (e.g. a segmentation
+continuing along the filum terminale below the conus tip).
+
 ## Notes
 
 - `sacral_length_along_centerline.py` requires SCT. The subject sex and height are read from the participants Excel
